@@ -28,7 +28,7 @@ export default function AdminVideos({ onBack }: { onBack: () => void }) {
 
   const fetchVideos = async () => {
     try {
-      const res = await fetch('/api/videos');
+      const res = await fetch('/api/videos/admin');
       if (res.ok) {
         const data = await res.json();
         setVideos(data.videos);

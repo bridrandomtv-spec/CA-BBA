@@ -11,7 +11,7 @@ export default function CabbaTv() {
     fetch('/api/videos')
       .then(res => res.json())
       .then(data => {
-        // filter published only, though maybe the API should do it. Let's do it here.
+        // The API already returns published videos only; kept as a second gate.
         setVideos(data.videos.filter((v: Video) => v.published));
       })
       .catch(e => console.error(e));
