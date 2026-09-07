@@ -7,6 +7,12 @@
  * sautés explicitement plutôt que de faire échouer le run.
  *
  * Lancement : npm run test:db
+ *
+ * Le nom ne porte volontairement pas le motif `.test.mts` : `npm test` lance
+ * `node --test` sans argument, et depuis Node 22 la découverte par défaut
+ * inclut les fichiers TypeScript `*.test.mts`. Ce test serait alors chargé sans
+ * tsx et échouerait sur ses imports. Il n'est lancé que par le chemin explicite
+ * de `npm run test:db`.
  */
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
