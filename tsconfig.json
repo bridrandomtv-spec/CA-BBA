@@ -47,7 +47,11 @@
     "src",
     "server.ts",
     "server/**/*",
-    "vite.config.ts"
+    "vite.config.ts",
+    // Borné à tests/db et non à tests : `allowJs` est actif, donc inclure
+    // tests aspirerait aussi les onze tests/*.test.mjs, écrits sans jamais
+    // avoir été soumis au compilateur.
+    "tests/db"
   ],
   "exclude": [
     "node_modules",
