@@ -87,11 +87,13 @@ async function main(): Promise<void> {
   console.log(`Base cible : ${target.database} @ ${target.host}:${target.port} (role PostgreSQL ${target.role})`);
 
   if (!process.stdin.isTTY) {
-    console.warn(
-      '\nAvertissement : l’entrée standard n’est pas interactive (pipe ou redirection).\n' +
-        'Ce script se pilote au clavier et s’arrêterait sans rien créer — lancez-le directement\n' +
-        'dans un terminal : npm run create:admin',
+    console.error(
+      '\nEntrée standard non interactive (pipe ou redirection) : abandon.\n' +
+        'Ce script se pilote au clavier — lancez-le directement dans un terminal :\n' +
+        '  npm run create:admin',
     );
+    process.exitCode = 1;
+    return;
   }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
