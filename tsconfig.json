@@ -1,0 +1,57 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    // `noImplicitOverride` n'est pas activé : il exigerait un mot-clé `override`
+    // sur `state`, `render` et `componentDidCatch` de ErrorBoundary, héritées de
+    // React.Component. Aucun bug à gagner pour un seul composant de classe.
+    //
+    // Volontairement désactivés : le code existant contient des imports
+    // inutilisés qui feraient échouer le lint sans rien apprendre d'utile.
+    // À activer après nettoyage des composants.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "server.ts",
+    "server/**/*",
+    "vite.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scripts/legacy"
+  ]
+}

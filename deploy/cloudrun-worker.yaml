@@ -1,0 +1,71 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cabba-football-worker
+  annotations:
+    run.googleapis.com/ingress: internal
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "1"
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      containerConcurrency: 1
+      timeoutSeconds: 3600
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/cabba/cabba:TAG
+          command: ["node"]
+          args: ["dist/football-worker.cjs"]
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: FOOTBALL_SCHEDULER_ENABLED
+              value: "true"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-database-url
+                  key: latest
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-session-secret
+                  key: latest
+            - name: VAPID_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-public-key
+                  key: latest
+            - name: VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-private-key
+                  key: latest
+            - name: VAPID_SUBJECT
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-subject
+                  key: latest
+            - name: API_FOOTBALL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-api-football-key
+                  key: latest
+            - name: API_FOOTBALL_LEAGUE_ID
+              value: "187"
+            - name: API_FOOTBALL_TEAM_ID
+              value: "925"
+            - name: API_FOOTBALL_SEASON
+              value: "2026"
+            - name: API_FOOTBALL_DAILY_QUOTA
+              value: "90"
+            - name: API_FOOTBALL_TIMEOUT_MS
+              value: "8000"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi

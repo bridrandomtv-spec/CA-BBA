@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>CABBA — générateur d'icônes PWA</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        max-width: 40rem;
+        margin: 3rem auto;
+        padding: 0 1.5rem;
+        color: #18181b;
+        line-height: 1.6;
+      }
+      h1 { font-size: 1.25rem; }
+      code {
+        background: #f4f4f5;
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .preview {
+        display: flex;
+        gap: 1.5rem;
+        align-items: flex-end;
+        margin: 2rem 0;
+        flex-wrap: wrap;
+      }
+      .preview figure { margin: 0; text-align: center; }
+      .preview img {
+        display: block;
+        border: 1px solid #e4e4e7;
+        border-radius: 12px;
+      }
+      figcaption { font-size: 0.75rem; color: #71717a; margin-top: 0.4rem; }
+      button {
+        background: #FFCC00;
+        color: #09090b;
+        border: none;
+        font-weight: 700;
+        font-size: 0.95rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      button:hover { background: #e6b800; }
+      ol { padding-left: 1.25rem; }
+      .note {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Générateur d'icônes PWA — CABBA</h1>
+
+    <p>
+      Le manifeste référence <code>icon-192.png</code> et <code>icon-512.png</code>.
+      Cette page les produit à partir de la même source vectorielle que
+      <code>public/icon.svg</code>, sans installer de dépendance.
+    </p>
+
+    <ol>
+      <li>Clique sur le bouton ci-dessous : les deux fichiers sont téléchargés.</li>
+      <li>Déplace-les dans <code>public/</code>, à côté de <code>icon.svg</code>.</li>
+      <li>Relance <code>npm run build</code>.</li>
+    </ol>
+
+    <p class="note">
+      Le « C » occupe moins de 60 % du canvas : l'icône reste correcte une fois
+      rognée en cercle par Android (<code>purpose: "any maskable"</code>).
+      Si tu obtiens le logo officiel du club, remplace simplement ces PNG en
+      gardant les mêmes noms et tailles.
+    </p>
+
+    <div class="preview" id="preview"></div>
+
+    <button id="download">Télécharger icon-192.png et icon-512.png</button>
+
+    <script>
+      // Source vectorielle — doit rester identique à public/icon.svg.
+      const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+        <rect width="512" height="512" fill="#09090b"/>
+        <circle cx="256" cy="256" r="196" fill="none" stroke="#FFCC00" stroke-width="8" stroke-opacity="0.28"/>
+        <path d="M 352.4 141.1 A 150 150 0 1 0 352.4 370.9 L 317.1 328.8 A 95 95 0 1 1 317.1 183.2 Z" fill="#FFCC00"/>
+      </svg>`;
+
+      const SIZES = [192, 512];
+
+      /** Rend le SVG dans un canvas à la taille demandée. */
+      function renderToCanvas(size) {
+        return new Promise((resolve, reject) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const context = canvas.getContext('2d');
+
+          const image = new Image();
+          // Data URL plutôt que fichier local : évite de « teinter » le canvas,
+          // ce qui bloquerait toBlob() en file://.
+          image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SVG);
+          image.onload = () => {
+            context.drawImage(image, 0, 0, size, size);
+            resolve(canvas);
+          };
+          image.onerror = () => reject(new Error('Rendu du SVG impossible'));
+        });
+      }
+
+      function downloadCanvas(canvas, filename) {
+        return new Promise((resolve) => {
+          canvas.toBlob((blob) => {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            // Laisse au navigateur le temps d'amorcer le téléchargement.
+            setTimeout(() => {
+              URL.revokeObjectURL(url);
+              resolve();
+            }, 400);
+          }, 'image/png');
+        });
+      }
+
+      (async () => {
+        const preview = document.getElementById('preview');
+
+        for (const size of SIZES) {
+          const canvas = await renderToCanvas(size);
+          const figure = document.createElement('figure');
+          const img = document.createElement('img');
+          img.src = canvas.toDataURL('image/png');
+          img.width = Math.min(size, 160);
+          img.height = Math.min(size, 160);
+          const caption = document.createElement('figcaption');
+          caption.textContent = `icon-${size}.png`;
+          figure.append(img, caption);
+          preview.append(figure);
+        }
+
+        document.getElementById('download').addEventListener('click', async () => {
+          for (const size of SIZES) {
+            const canvas = await renderToCanvas(size);
+            await downloadCanvas(canvas, `icon-${size}.png`);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

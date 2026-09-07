@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="CABBA">
+  <!--
+    أيقونة نادي شباب أهلي برج بوعريريج (CABBA)
+    Fond plein + « C » centré dans la safe-zone maskable (~58% du canvas),
+    ce qui rend l'icône utilisable en purpose "any" comme "maskable".
+    Couleurs du club : أصفر / أسود — jaune #FFCC00 sur noir #09090b.
+  -->
+  <rect width="512" height="512" fill="#09090b"/>
+  <circle cx="256" cy="256" r="196" fill="none" stroke="#FFCC00" stroke-width="8" stroke-opacity="0.28"/>
+  <path
+    d="M 352.4 141.1
+       A 150 150 0 1 0 352.4 370.9
+       L 317.1 328.8
+       A 95 95 0 1 1 317.1 183.2
+       Z"
+    fill="#FFCC00"/>
+</svg>

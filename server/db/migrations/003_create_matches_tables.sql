@@ -1,0 +1,34 @@
+CREATE TABLE IF NOT EXISTS matches (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  home_team VARCHAR(255) NOT NULL,
+  away_team VARCHAR(255) NOT NULL,
+  competition VARCHAR(255) NOT NULL,
+  match_date DATE NOT NULL,
+  match_time TIME NOT NULL,
+  stadium VARCHAR(255) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+  home_score INTEGER DEFAULT 0,
+  away_score INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS match_updates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  match_id UUID NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+  minute INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  type VARCHAR(50) NOT NULL DEFAULT 'neutral',
+  team VARCHAR(10),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS match_highlights (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  match_title VARCHAR(255) NOT NULL,
+  highlight_date DATE NOT NULL,
+  duration VARCHAR(20) NOT NULL,
+  thumbnail VARCHAR(1024) NOT NULL,
+  video_url VARCHAR(1024),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

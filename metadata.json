@@ -1,0 +1,8 @@
+{
+  "name": "Remix CABBA Supporter App",
+  "description": "A custom mobile-first web app for the supporters of CA Bordj Bou Arreridj (CABBA) featuring news, media hub, support center, and AI assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# لا فائدة من فهرسة نقاط الـ API
+Disallow: /api/

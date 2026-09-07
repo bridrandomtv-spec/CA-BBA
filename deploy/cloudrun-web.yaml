@@ -1,0 +1,103 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: cabba-web
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "5"
+        run.googleapis.com/startup-cpu-boost: "true"
+    spec:
+      containerConcurrency: 80
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/cabba/cabba:TAG
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: FOOTBALL_SCHEDULER_ENABLED
+              value: "false"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-database-url
+                  key: latest
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-session-secret
+                  key: latest
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-gemini-api-key
+                  key: latest
+            - name: VAPID_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-public-key
+                  key: latest
+            - name: VAPID_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-private-key
+                  key: latest
+            - name: VAPID_SUBJECT
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-vapid-subject
+                  key: latest
+            - name: R2_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-r2-account-id
+                  key: latest
+            - name: R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-r2-access-key-id
+                  key: latest
+            - name: R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-r2-secret-access-key
+                  key: latest
+            - name: R2_BUCKET
+              value: cabba-media
+            - name: R2_PUBLIC_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-r2-public-base-url
+                  key: latest
+            - name: RESEND_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-resend-api-key
+                  key: latest
+            - name: EMAIL_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: cabba-email-from
+                  key: latest
+            - name: APP_BASE_URL
+              value: https://YOUR-DOMAIN.example
+            - name: API_FOOTBALL_LEAGUE_ID
+              value: "187"
+            - name: API_FOOTBALL_TEAM_ID
+              value: "925"
+            - name: API_FOOTBALL_SEASON
+              value: "2026"
+            - name: API_FOOTBALL_DAILY_QUOTA
+              value: "90"
+            - name: API_FOOTBALL_TIMEOUT_MS
+              value: "8000"
+            - name: TRUST_PROXY
+              value: "true"
+            # API_FOOTBALL_KEY is intentionally not mounted in the web service.
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi

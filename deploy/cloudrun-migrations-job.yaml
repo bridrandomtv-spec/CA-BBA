@@ -1,0 +1,26 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: cabba-migrations
+spec:
+  template:
+    template:
+      spec:
+        maxRetries: 1
+        timeoutSeconds: 600
+        containers:
+          - image: REGION-docker.pkg.dev/PROJECT_ID/cabba/cabba:TAG
+            command: ["node"]
+            args: ["dist/migrate.cjs"]
+            env:
+              - name: NODE_ENV
+                value: production
+              - name: DATABASE_URL
+                valueFrom:
+                  secretKeyRef:
+                    name: cabba-database-url
+                    key: latest
+            resources:
+              limits:
+                cpu: "1"
+                memory: 256Mi

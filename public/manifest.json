@@ -1,0 +1,35 @@
+{
+  "id": "/",
+  "name": "أنصار شباب أهلي برج بوعريريج",
+  "short_name": "الجراد الأصفر",
+  "description": "المنصة الرقمية الرسمية لأنصار نادي شباب أهلي برج بوعريريج: الأخبار، مركز المباريات، كابا TV، الأهازيج، المتجر والعضوية.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "categories": ["sports", "entertainment", "social"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

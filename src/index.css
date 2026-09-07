@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --animate-shimmer: shimmer 2s linear infinite;
+}
+
+/* Tailwind 4 attend un bloc @keyframes classique.
+   L'ancienne écriture `--keyframes-shimmer: { ... }` n'est pas une syntaxe
+   valide : l'animation référençait des keyframes qui n'existaient pas. */
+@keyframes shimmer {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+
+@utility hide-scrollbar {
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Utilitaires « safe area » (encoche iOS, barre de gestes Android).
+   Ils étaient auparavant déclarés dans un <style> de index.html, et `top-safe`
+   n'existait nulle part alors que MatchAlert et MatchHighlights l'utilisent.
+   Nécessite <meta name="viewport" content="... viewport-fit=cover"> */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility top-safe {
+  top: env(safe-area-inset-top, 0px);
+}
+
+@utility mt-safe {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* Thème clair : on inverse l'échelle de gris en redéfinissant les variables de
+   Tailwind, ce qui permet aux composants de garder leurs classes `bg-zinc-*`
+   sans conditionnelle. `--color-black` doit être inversé lui aussi, sinon un
+   `bg-black text-white` (champ de saisie de l'assistant) devient illisible. */
+.theme-light {
+  color-scheme: light;
+
+  --color-zinc-950: #f8fafc;
+  --color-zinc-900: #ffffff;
+  --color-zinc-800: #f1f5f9;
+  --color-zinc-700: #e2e8f0;
+  --color-zinc-600: #cbd5e1;
+  --color-zinc-500: #94a3b8;
+  --color-zinc-400: #64748b;
+  --color-zinc-300: #475569;
+  --color-zinc-200: #334155;
+  --color-zinc-100: #1e293b;
+  --color-zinc-50: #0f172a;
+
+  --color-white: #0f172a;
+  --color-black: #ffffff;
+}
