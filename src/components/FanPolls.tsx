@@ -15,31 +15,7 @@ interface Poll {
   category: string;
 }
 
-const initialPolls: Poll[] = [
-  {
-    id: '1',
-    question: 'من هو رجل مباراة الكابا ضد شبيبة القبائل؟',
-    category: 'رجل المباراة',
-    totalVotes: 1245,
-    options: [
-      { id: 'o1', text: 'محمد بن يحيى', votes: 850 },
-      { id: 'o2', text: 'يوسف شيبان', votes: 215 },
-      { id: 'o3', text: 'وليد عمار', votes: 120 },
-      { id: 'o4', text: 'أخرى', votes: 60 },
-    ]
-  },
-  {
-    id: '2',
-    question: 'ما هي الخطة الأنسب للمباراة القادمة ضد وفاق سطيف؟',
-    category: 'الخطة المفضلة',
-    totalVotes: 890,
-    options: [
-      { id: 'o1', text: '4-3-3 الهجومية', votes: 500 },
-      { id: 'o2', text: '4-4-2 التوازن', votes: 300 },
-      { id: 'o3', text: '3-5-2 الدفاعية', votes: 90 },
-    ]
-  }
-];
+const initialPolls: Poll[] = [];
 
 export default function FanPolls() {
   const [polls, setPolls] = useState<Poll[]>(initialPolls);
@@ -76,7 +52,7 @@ export default function FanPolls() {
       </div>
 
       <div className="space-y-4">
-        {polls.map(poll => {
+        {polls.length > 0 ? polls.map(poll => {
           const hasVoted = !!votedPolls[poll.id];
           const votedOptionId = votedPolls[poll.id];
 
@@ -136,7 +112,13 @@ export default function FanPolls() {
               </div>
             </div>
           );
-        })}
+        }) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+            <BarChart2 size={48} className="text-zinc-700 mb-4" />
+            <h4 className="font-bold text-zinc-400">لا توجد استطلاعات حالياً</h4>
+            <p className="text-xs text-zinc-500 mt-2">السبر القادم سيكون متاحاً قريباً.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Camera, Heart, MessageCircle, Upload, Loader2 } from 'lucide-react';
+import { Camera, Heart, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { uploadMedia } from '../lib/mediaUpload';
 
@@ -14,28 +14,7 @@ interface FanPost {
   time: string;
 }
 
-const initialPosts: FanPost[] = [
-  {
-    id: '1',
-    author: 'أمين برايجي',
-    avatar: 'A',
-    image: 'https://images.unsplash.com/photo-1614632537190-23e4146777db?auto=format&fit=crop&q=80&w=400&h=400',
-    caption: 'أجواء رائعة في الملعب اليوم، الفوز إن شاء الله! 🟡⚫',
-    upvotes: 124,
-    comments: 12,
-    time: 'منذ ساعتين'
-  },
-  {
-    id: '2',
-    author: 'يوسف العاصمة',
-    avatar: 'Y',
-    image: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=400&h=400',
-    caption: 'الجراد الأصفر دائماً في الموعد.. لن تسير وحدك أبداً يا أهلي',
-    upvotes: 89,
-    comments: 5,
-    time: 'منذ 4 ساعات'
-  }
-];
+const initialPosts: FanPost[] = [];
 
 export default function FanGallery() {
   const [posts, setPosts] = useState<FanPost[]>(initialPosts);
@@ -95,7 +74,7 @@ export default function FanGallery() {
       </div>
 
       <div className="space-y-4">
-        {posts.map(post => {
+        {posts.length > 0 ? posts.map(post => {
           const isUpvoted = upvotedPosts[post.id];
           return (
             <div key={post.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-sm">
@@ -134,7 +113,13 @@ export default function FanGallery() {
               </div>
             </div>
           );
-        })}
+        }) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+            <ImageIcon size={48} className="text-zinc-700 mb-4" />
+            <h4 className="font-bold text-zinc-400">لا توجد صور حالياً</h4>
+            <p className="text-xs text-zinc-500 mt-2">كن أول من يشارك صورة للجراد الأصفر!</p>
+          </div>
+        )}
       </div>
     </div>
   );

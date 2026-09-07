@@ -1,28 +1,15 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function MatchStatsVisualization() {
-  const data = [
-    {
-      name: 'الاستحواذ (%)',
-      'الكابا': 58,
-      'المنافس': 42,
-    },
-    {
-      name: 'التسديدات',
-      'الكابا': 12,
-      'المنافس': 8,
-    },
-    {
-      name: 'تسديدات على المرمى',
-      'الكابا': 5,
-      'المنافس': 2,
-    },
-    {
-      name: 'الأخطاء',
-      'الكابا': 10,
-      'المنافس': 14,
-    },
-  ];
+  const data: any[] = [];
+  
+  if (data.length === 0) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm w-full h-[300px] flex items-center justify-center">
+        <span className="text-zinc-500 font-bold text-sm">البيانات غير متوفرة حالياً</span>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm w-full h-[300px]">
