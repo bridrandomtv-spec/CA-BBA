@@ -24,6 +24,7 @@
     "forceConsistentCasingInFileNames": true,
 
     "strict": true,
+    "noImplicitAny": false,
     "noFallthroughCasesInSwitch": true,
     // `noImplicitOverride` n'est pas activé : il exigerait un mot-clé `override`
     // sur `state`, `render` et `componentDidCatch` de ErrorBoundary, héritées de

@@ -53,7 +53,7 @@ export default function MatchCalendar() {
       </div>
     ));
     
-    const grid = [];
+    const grid: React.ReactElement[] = [];
     for (let i = 0; i < startDay; i++) {
       grid.push(<div key={`empty-${i}`} className="p-2"></div>);
     }

@@ -41,7 +41,7 @@ export default function FanGallery() {
   const [posts, setPosts] = useState<FanPost[]>(initialPosts);
   const [upvotedPosts, setUpvotedPosts] = useState<Record<string, boolean>>({});
   const [uploading, setUploading] = useState(false);
-  const { user } = useAuth();
+  const { currentUser: user } = useAuth();
 
   const handleUpvote = (postId: string) => {
     setPosts(prev => prev.map(post => {
@@ -67,8 +67,8 @@ export default function FanGallery() {
       const media = await uploadMedia(file, 'fan-gallery');
       if (!media.publicUrl) throw new Error('URL publique R2 non configurée.');
       const post: FanPost = {
-        id: `r2-${Date.now()}`, author: `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'مشجع',
-        avatar: (user.firstName || 'م').slice(0, 1), image: media.publicUrl, caption: 'من عدسة الجماهير 🟡⚫',
+        id: `r2-${Date.now()}`, author: user.displayName || 'مشجع',
+        avatar: (user.displayName || 'م').slice(0, 1), image: media.publicUrl, caption: 'من عدسة الجماهير 🟡⚫',
         upvotes: 0, comments: 0, time: 'الآن'
       };
       setPosts(prev => [post, ...prev]);
