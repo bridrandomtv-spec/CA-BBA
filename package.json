@@ -14,7 +14,7 @@
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "tidy": "node scripts/tidy-root.mjs",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --test tests/",
     "test:db": "node --import tsx --test tests/db/auth-register.test.mts",
     "migrate": "tsx server/db/migrate.ts",
     "football:verify": "tsx scripts/verify-football.mts",
