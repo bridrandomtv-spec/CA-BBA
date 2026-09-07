@@ -12,6 +12,25 @@ jobs:
   test-build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cabba
+          POSTGRES_PASSWORD: cabba_ci_only
+          POSTGRES_DB: cabba_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Jetables et propres à ce job : .env est ignoré par git donc absent de CI,
+      # et server/env.ts ne tolère ces absences que hors production.
+      DATABASE_URL: postgres://cabba:cabba_ci_only@localhost:5432/cabba_ci
+      SESSION_SECRET: ci-only-not-a-secret-0123456789abcdef
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,6 +43,12 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Integrity tests
         run: npm test
+      # Les migrations échouent si la base est injoignable : c'est ce qui interdit
+      # à test:db de se mettre en skip et de laisser CI verte sans rien vérifier.
+      - name: Apply migrations
+        run: npm run migrate
+      - name: Database integration tests
+        run: npm run test:db
       - name: Typecheck
         run: npm run typecheck
       - name: Production build
