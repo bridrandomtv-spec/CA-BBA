@@ -34,10 +34,10 @@ const SESSION_DAYS = 7;
 const SESSION_MAX_AGE_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 
 /** Coût du hachage bcrypt. 12 tours ≈ 250 ms sur un serveur modeste. */
-const BCRYPT_ROUNDS = 12;
+export const BCRYPT_ROUNDS = 12;
 
 /** Longueur minimale d'un mot de passe à l'inscription. */
-const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 8;
 
 /** Rôles acceptés, alignés sur la contrainte CHECK de la table users. */
 export const ROLES = ['user', 'admin'] as const;
@@ -88,12 +88,12 @@ function toAuthUser(row: UserRow): AuthUser {
  * « Ali@example.com » et « ali@example.com » créent deux comptes distincts
  * malgré la contrainte d'unicité.
  */
-function normalizeEmail(value: string): string {
+export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
 }
 
 /** Contrôle volontairement simple : une arobase entourée de texte sans espace. */
-function isEmailShaped(value: string): boolean {
+export function isEmailShaped(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
