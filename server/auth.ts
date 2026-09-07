@@ -143,7 +143,7 @@ export const requireAuth: RequestHandler = async (req: Request, res: Response, n
   }
 
   try {
-    const result = await query(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [userId]);
+    const result = await query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [userId]);
 
     if (result.rows.length === 0) {
       // Compte supprimé alors qu'une session était encore ouverte.
@@ -170,11 +170,22 @@ const ensureAdmin: RequestHandler = (req: Request, res: Response, next: NextFunc
 };
 
 /**
- * À monter tel quel sur une route réservée aux administrateurs.
- * Express accepte un tableau de middlewares, les deux contrôles restent donc
- * inséparables : `router.post('/', requireAdmin, handler)`.
+ * À monter tel quel sur une route réservée aux administrateurs :
+ * `router.post('/', requireAdmin, handler)`. Les deux contrôles restent
+ * inséparables, mais composés en un seul handler plutôt qu'exportés en tableau :
+ * un tableau passé comme argument unique fait perdre à TypeScript le typage
+ * contextuel de `req`/`res` sur le handler suivant.
  */
-export const requireAdmin: RequestHandler[] = [requireAuth, ensureAdmin];
+export const requireAdmin: RequestHandler = async (req, res, next) => {
+  let authenticated = false;
+  // Callback intermédiaire : transmettre le `next` d'Express à requireAuth
+  // enchaînerait directement sur le handler et court-circuiterait le contrôle admin.
+  await requireAuth(req, res, () => {
+    authenticated = true;
+  });
+  if (!authenticated) return;
+  ensureAdmin(req, res, next);
+};
 
 authRouter.post('/register', async (req: Request, res: Response): Promise<void> => {
   try {
@@ -222,7 +233,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
 
     // Le rôle est écrit en dur : un `role` envoyé dans le corps de la requête
     // ne doit jamais pouvoir créer un administrateur.
-    const result = await query(
+    const result = await query<UserRow>(
       `INSERT INTO users (email, password_hash, display_name, role)
        VALUES ($1, $2, $3, 'user')
        RETURNING ${USER_COLUMNS}`,
@@ -253,7 +264,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const result = await query(
+    const result = await query<UserRow & { password_hash: string }>(
       `SELECT ${USER_COLUMNS}, password_hash FROM users WHERE email = $1`,
       [normalizeEmail(email)],
     );
@@ -327,7 +338,7 @@ authRouter.patch('/profile', requireAuth, async (req: Request, res: Response): P
 
     params.push(userId);
 
-    const result = await query(
+    const result = await query<UserRow>(
       `UPDATE users SET ${fragments.join(', ')}
        WHERE id = $${params.length}
        RETURNING ${USER_COLUMNS}`,

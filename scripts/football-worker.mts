@@ -3,12 +3,6 @@ import { pool } from '../server/db/index.js';
 import { env } from '../server/env.js';
 import { startFootballScheduler, stopFootballScheduler } from '../server/football/scheduler.js';
 
-if (!env.apiFootballKey) {
-  console.error('[CABBA] Football worker cannot start: API_FOOTBALL_KEY is missing.');
-  await pool.end();
-  process.exit(1);
-}
-
 const port = Number(process.env.PORT ?? 3000);
 const host = process.env.HOST ?? '0.0.0.0';
 
@@ -20,12 +14,6 @@ const healthServer = http.createServer((req, res) => {
   }
   res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ error: 'Not found' }));
-});
-
-healthServer.listen(port, host, () => {
-  console.log(`[CABBA] Football worker health endpoint listening on http://${host}:${port}`);
-  console.log('[CABBA] Football worker starting (scheduler only; no web application).');
-  startFootballScheduler();
 });
 
 let stopping = false;
@@ -40,5 +28,23 @@ async function shutdown(signal: string) {
   process.exit(0);
 }
 
-process.once('SIGTERM', () => void shutdown('SIGTERM'));
-process.once('SIGINT', () => void shutdown('SIGINT'));
+// Le bundle est émis avec --format=cjs, qui refuse le `await` au premier niveau :
+// le garde de démarrage doit donc vivre dans une fonction asynchrone.
+async function main() {
+  if (!env.apiFootballKey) {
+    console.error('[CABBA] Football worker cannot start: API_FOOTBALL_KEY is missing.');
+    await pool.end();
+    process.exit(1);
+  }
+
+  healthServer.listen(port, host, () => {
+    console.log(`[CABBA] Football worker health endpoint listening on http://${host}:${port}`);
+    console.log('[CABBA] Football worker starting (scheduler only; no web application).');
+    startFootballScheduler();
+  });
+
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+}
+
+void main();

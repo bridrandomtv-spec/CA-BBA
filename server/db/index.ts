@@ -33,13 +33,16 @@ pool.on('error', (error) => {
 /** Paramètres d'une requête : valeurs simples ou tableaux, jamais du SQL. */
 export type QueryParams = readonly unknown[];
 
-export const query = async (text: string, params?: QueryParams) => {
+export const query = async <T extends pkg.QueryResultRow = pkg.QueryResultRow>(
+  text: string,
+  params?: QueryParams,
+): Promise<pkg.QueryResult<T>> => {
   if (!connectionString) {
     throw new Error(
       "DATABASE_URL est manquante. Impossible de se connecter à PostgreSQL depuis cet environnement.",
     );
   }
-  return pool.query(text, params as unknown[] | undefined);
+  return pool.query<T>(text, params as unknown[] | undefined);
 };
 
 /**
