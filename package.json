@@ -19,7 +19,8 @@
     "football:verify": "tsx scripts/verify-football.mts",
     "football:sync": "tsx scripts/sync-football.mts",
     "vapid:generate": "node scripts/generate-vapid.mjs",
-    "football:worker": "tsx scripts/football-worker.mts"
+    "football:worker": "tsx scripts/football-worker.mts",
+    "promote:admin": "tsx scripts/promote-admin.mts"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",
