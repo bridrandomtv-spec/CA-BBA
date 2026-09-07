@@ -94,8 +94,11 @@ spec:
               value: "90"
             - name: API_FOOTBALL_TIMEOUT_MS
               value: "8000"
+            # Exactly one trusted hop: Cloud Run's load balancer appends the real
+            # client IP. "true" would trust the leftmost X-Forwarded-For entry,
+            # which any client can set, defeating every IP-keyed rate limit.
             - name: TRUST_PROXY
-              value: "true"
+              value: "1"
             # API_FOOTBALL_KEY is intentionally not mounted in the web service.
           resources:
             limits:
