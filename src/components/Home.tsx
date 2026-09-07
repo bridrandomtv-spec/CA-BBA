@@ -13,29 +13,7 @@ interface HomeProps {
 export default function Home({ onNavigate }: HomeProps) {
   const [showHistory, setShowHistory] = useState(false);
 
-  const news = [
-    {
-      id: '1',
-      title: 'استئناف التدريبات بملعب 20 أوت',
-      excerpt: 'الفريق يعود للتدريبات تحضيراً للمباراة القادمة بحضور جماهيري غفير.',
-      date: 'منذ ساعتين',
-      category: 'الفريق الأول',
-    },
-    {
-      id: '2',
-      title: 'حملة الانخراط في النادي',
-      excerpt: 'الإدارة تفتح باب الانخراط الرقمي للأنصار لدعم استقرار النادي.',
-      date: 'منذ 5 ساعات',
-      category: 'النادي',
-    },
-    {
-      id: '3',
-      title: 'ندوة صحفية للمدرب غداً',
-      excerpt: 'مدرب الفريق يعقد ندوة صحفية للحديث عن التحديات القادمة.',
-      date: 'أمس',
-      category: 'تصريحات',
-    }
-  ];
+  const news: any[] = []; // Empty for now as there's no real backend news API
 
   if (showHistory) {
     return <ClubHistory onBack={() => setShowHistory(false)} />;
@@ -52,33 +30,13 @@ export default function Home({ onNavigate }: HomeProps) {
             <span className="text-[10px] bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded font-bold uppercase tracking-wider">
               المباراة القادمة
             </span>
-            <span className="text-xs text-zinc-400 flex items-center gap-1">
-              <Calendar size={12} />
-              السبت، 20:00
-            </span>
           </div>
           
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex flex-col items-center">
-              <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border-2 border-yellow-500 mb-2 shadow-[0_0_10px_rgba(234,179,8,0.3)]">
-                <span className="font-bold text-lg text-yellow-500">C</span>
-              </div>
-              <span className="font-bold text-sm text-white">الكابا</span>
-            </div>
-            
-            <div className="flex flex-col items-center px-4">
-              <span className="text-2xl font-black text-white bg-zinc-800 px-3 py-1 rounded-lg">VS</span>
-            </div>
-            
-            <div className="flex flex-col items-center">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center border-2 border-zinc-700 mb-2" style={{ backgroundColor: "#ffffff" }}>
-                <span className="font-bold text-lg text-black">M</span>
-              </div>
-              <span className="font-bold text-sm text-white">المنافس</span>
-            </div>
+          <div className="text-center text-zinc-500 py-6 text-sm font-bold border border-zinc-800 border-dashed rounded-xl mb-4">
+            البيانات غير متوفرة
           </div>
           
-          <button onClick={() => onNavigate && onNavigate('match')} className="w-full bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors">
+          <button onClick={() => onNavigate && onNavigate('match')} className="w-full bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-colors">
             مركز المباراة
             <ArrowLeft size={16} />
           </button>
@@ -88,13 +46,13 @@ export default function Home({ onNavigate }: HomeProps) {
       {/* Quick Stats / Mini Dashboard */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-center items-center text-center hover:border-yellow-500/30 transition-colors">
-          <Trophy size={24} className="text-yellow-500 mb-2" />
-          <span className="text-2xl font-black text-white block">3</span>
+          <Trophy size={24} className="text-zinc-600 mb-2" />
+          <span className="text-lg font-black text-zinc-500 block">-</span>
           <span className="text-xs text-zinc-400 font-medium">الترتيب الحالي</span>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col justify-center items-center text-center hover:border-yellow-500/30 transition-colors">
-          <div className="w-8 h-8 rounded-full bg-yellow-500/20 text-yellow-500 flex items-center justify-center mb-2 font-bold">12</div>
-          <span className="text-2xl font-black text-white block">24</span>
+          <div className="w-8 h-8 rounded-full bg-zinc-800 text-zinc-600 flex items-center justify-center mb-2 font-bold">-</div>
+          <span className="text-lg font-black text-zinc-500 block">-</span>
           <span className="text-xs text-zinc-400 font-medium">النقاط</span>
         </div>
       </div>
@@ -130,26 +88,10 @@ export default function Home({ onNavigate }: HomeProps) {
         <div className="relative z-10">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-lg text-white">صندوق دعم النادي</h3>
-            <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-1 rounded font-bold uppercase tracking-wider">
-              شفافية 100%
-            </span>
           </div>
           
-          <div className="mb-4">
-            <div className="flex justify-between text-xs font-bold text-white mb-2">
-              <span>تم جمع: 125,000 دج</span>
-              <span className="text-zinc-400">الهدف: 500,000 دج</span>
-            </div>
-            <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden flex">
-              <div className="h-full bg-yellow-500 w-[25%] rounded-full shadow-[0_0_10px_rgba(234,179,8,0.5)] relative">
-                <div className="absolute inset-0 bg-white/20 w-full h-full animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-zinc-800/50 rounded-xl p-3 border border-zinc-700/50 text-xs text-zinc-300">
-            <p className="mb-2"><span className="text-yellow-500 font-bold">•</span> المساهمات الأخيرة ذهبت لـ: <span className="font-bold text-white">مصاريف تنقل الفريق للفئات الشبانية</span></p>
-            <p><span className="text-yellow-500 font-bold">•</span> عدد المساهمين هذا الشهر: <span className="font-bold text-white">342 مناصر</span></p>
+          <div className="text-center text-zinc-500 py-6 border border-zinc-800 border-dashed rounded-xl text-xs">
+            البيانات غير متوفرة حالياً
           </div>
         </div>
       </div>
@@ -161,7 +103,7 @@ export default function Home({ onNavigate }: HomeProps) {
         </div>
         
         <div className="space-y-3">
-          {news.map((item) => (
+          {news.length > 0 ? news.map((item) => (
             <div key={item.id} className="bg-zinc-900 border border-zinc-800 hover:border-yellow-500/30 transition-colors rounded-xl p-4 flex gap-4 items-center">
               <div className="w-16 h-16 rounded-lg bg-black flex-none flex items-center justify-center border border-zinc-800">
                 <div className="text-yellow-500/50 font-bold">C</div>
@@ -175,7 +117,11 @@ export default function Home({ onNavigate }: HomeProps) {
                 <span className="text-[10px] text-zinc-500 mt-2 block">{item.date}</span>
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="text-center text-zinc-500 py-6 border border-zinc-800 border-dashed rounded-xl text-xs">
+              لا توجد أخبار حالياً
+            </div>
+          )}
         </div>
       </div>
     </div>

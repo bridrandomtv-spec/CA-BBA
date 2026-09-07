@@ -40,7 +40,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Integrity tests
         run: npm test
       # Les migrations échouent si la base est injoignable : c'est ce qui interdit

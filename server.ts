@@ -28,6 +28,18 @@ const app = express();
 app.set('trust proxy', env.trustProxy);
 app.disable('x-powered-by');
 
+app.param('id', (req, res, next, id) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  // Let pass non-UUID IDs if they're explicitly handled like 'all' for /highlights/all, though 'all' is not an param but in the path. Wait, /highlights/all might trigger this if the route is /highlights/:id, but it's defined before or after? Express checks route match first then calls param.
+  // Actually, if an ID isn't a valid UUID, returning 400 is exactly what we want.
+  if (!uuidRegex.test(id)) {
+    // If it's a known non-UUID, allow it? We only use UUIDs in our DB.
+    res.status(400).json({ error: 'Invalid UUID format' });
+    return;
+  }
+  next();
+});
+
 app.use(requestId);
 app.use(securityHeaders);
 
@@ -109,23 +121,14 @@ function toGeminiHistory(history: unknown) {
     .slice(-MAX_HISTORY_TURNS);
 }
 
-const chatRate = new Map<string, { count: number; resetAt: number }>();
-const CHAT_WINDOW_MS = 60_000;
-const CHAT_LIMIT = 10;
+const chatRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  limit: 10,
+  message: 'Trop de requêtes. Réessayez dans une minute.',
+  keyPrefix: 'chat',
+});
 
-app.post("/api/chat", async (req, res) => {
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
-  const now = Date.now();
-  const bucket = chatRate.get(ip);
-  if (!bucket || bucket.resetAt <= now) {
-    chatRate.set(ip, { count: 1, resetAt: now + CHAT_WINDOW_MS });
-  } else if (bucket.count >= CHAT_LIMIT) {
-    res.status(429).json({ error: "Trop de requêtes. Réessayez dans une minute." });
-    return;
-  } else {
-    bucket.count += 1;
-  }
-
+app.post("/api/chat", chatRateLimit, async (req, res) => {
   try {
     const { message, history } = req.body ?? {};
 
@@ -196,6 +199,15 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
+    
+    app.use((req, res, next) => {
+      if (req.path.endsWith('.cjs') || req.path.endsWith('.cjs.map')) {
+        res.status(404).end();
+        return;
+      }
+      next();
+    });
+
     app.use(express.static(distPath));
     app.get("*all", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

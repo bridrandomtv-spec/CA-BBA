@@ -3,10 +3,11 @@ import { Calendar, MapPin, Bell, CalendarPlus, ChevronRight, ChevronLeft, Heart,
 import { useFavorites } from '../hooks/useFavorites';
 import { Match } from '../types';
 
-
-
 export default function MatchCalendar() {
-  const [currentMonthIndex, setCurrentMonthIndex] = useState(2); 
+  const currentDate = new Date();
+  const actualMonth = currentDate.getMonth(); // 0 to 11
+  
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(actualMonth); 
   const [filterStatus, setFilterStatus] = useState<'all' | 'past' | 'upcoming'>('all');
   const { favorites, toggleFavorite } = useFavorites();
   
@@ -27,13 +28,17 @@ export default function MatchCalendar() {
     fetchMatches();
   }, []);
 
-  const months = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان'];
-  const monthDays = [31, 29, 31, 30, 31, 30];
-  const startDayOfWeek = [1, 4, 5, 1, 3, 6]; 
+  const months = ['جانفي', 'فيفري', 'مارس', 'أفريل', 'ماي', 'جوان', 'جويلية', 'أوت', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  
+  // Calculate days in month and start day dynamically
+  const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const getStartDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+  
+  const currentYear = currentDate.getFullYear();
+  const daysInCurrentMonth = getDaysInMonth(currentYear, currentMonthIndex);
+  const startDay = getStartDayOfMonth(currentYear, currentMonthIndex);
 
   const filteredMatches = matches.filter(m => {
-    // In a real app we'd map m.date to month index. We'll just show all for this month for demo.
-    // Or we skip month filtering and just show them.
     if (filterStatus === 'all') return true;
     if (filterStatus === 'upcoming') return m.status === 'scheduled';
     if (filterStatus === 'past') return m.status === 'finished';
@@ -44,27 +49,25 @@ export default function MatchCalendar() {
   const nextMonth = () => setCurrentMonthIndex(prev => Math.min(months.length - 1, prev + 1));
 
   const renderCalendarGrid = () => {
-    const days = monthDays[currentMonthIndex];
-    const startDay = startDayOfWeek[currentMonthIndex];
-    
+    // Map JS getDay (0=Sun, 1=Mon...6=Sat) to [0=Sun, 1=Mon...] for Arabic calendar starting on Sunday
     const headers = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map(d => (
       <div key={d} className="text-center text-[10px] text-zinc-500 font-bold py-1">
         {d}
       </div>
     ));
     
-    const grid = [];
+    const grid: React.ReactElement[] = [];
     for (let i = 0; i < startDay; i++) {
       grid.push(<div key={`empty-${i}`} className="p-2"></div>);
     }
     
-    for (let day = 1; day <= days; day++) {
-      // rough match by date string
+    for (let day = 1; day <= daysInCurrentMonth; day++) {
       const matchOnDay = filteredMatches.find(m => {
           const matchDay = parseInt(m.date.split(' ')[0]) || 0;
-          return matchDay === day;
+          // Simple heuristic, real app should parse date string properly
+          return matchDay === day && (m.date.includes(months[currentMonthIndex]) || m.date.includes((currentMonthIndex+1).toString().padStart(2, '0')));
       });
-      const isToday = day === 12 && currentMonthIndex === 2;
+      const isToday = day === currentDate.getDate() && currentMonthIndex === actualMonth;
       
       grid.push(
         <div 

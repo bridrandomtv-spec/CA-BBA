@@ -2,29 +2,7 @@ import { ArrowRight, Trophy, History, Image as ImageIcon, ChevronRight } from 'l
 import { useState } from 'react';
 
 // Use the placeholder images we just generated
-const historicalImages = [
-  {
-    id: 1,
-    url: 'https://images.unsplash.com/photo-1518605368461-1e1e38ce7058?auto=format&fit=crop&q=80&w=800',
-    title: 'تأسيس النادي',
-    description: 'صورة تاريخية للفريق الأول بعد تأسيس نادي أهلي برج بوعريريج عام 1931.',
-    year: '1931'
-  },
-  {
-    id: 2,
-    url: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&q=80&w=800',
-    title: 'فرحة التتويج',
-    description: 'احتفالات الجراد الأصفر بالصعود وتحقيق إنجازات تاريخية.',
-    year: '1998'
-  },
-  {
-    id: 3,
-    url: 'https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&q=80&w=800',
-    title: 'الجراد الأصفر',
-    description: 'أنصار النادي الأوفياء يزينون المدرجات باللونين الأصفر والأسود.',
-    year: '1990'
-  }
-];
+const historicalImages: any[] = [];
 
 const timelineEvents = [
   {
@@ -124,21 +102,9 @@ export default function ClubHistory({ onBack }: { onBack: () => void }) {
                 <h3 className="font-bold text-white text-lg">معرض الصور التاريخي</h3>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {historicalImages.map((img) => (
-                    <div key={img.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden group cursor-pointer" onClick={() => setActiveImage(img.id)}>
-                        <div className="aspect-[4/3] relative overflow-hidden">
-                            <img src={img.url} alt={img.title} className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500" />
-                            <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-sm text-yellow-500 text-[10px] font-bold px-2 py-1 rounded">
-                                {img.year}
-                            </div>
-                        </div>
-                        <div className="p-4">
-                            <h4 className="font-bold text-white text-sm mb-1">{img.title}</h4>
-                            <p className="text-xs text-zinc-400 line-clamp-2">{img.description}</p>
-                        </div>
-                    </div>
-                ))}
+            <div className="bg-zinc-800/30 border border-zinc-700/30 rounded-xl p-6 text-center">
+              <h4 className="font-bold text-zinc-400 mb-2">الصور غير متوفرة</h4>
+              <p className="text-xs text-zinc-500">جاري تحديث أرشيف النادي.</p>
             </div>
         </div>
       </div>

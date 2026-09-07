@@ -92,17 +92,7 @@ export default function Profile() {
   const [formErrors, setFormErrors] = useState<string[]>([]);
 
   const handleResetPassword = async () => {
-    if (!email) {
-      alert('الرجاء إدخال البريد الإلكتروني أولاً');
-      return;
-    }
-    try {
-      alert('NOT MIGRATED');
-      alert('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.');
-    } catch (error: any) {
-      console.error(error);
-      alert('حدث خطأ. تأكد من صحة البريد الإلكتروني.');
-    }
+    alert('إعادة تعيين كلمة المرور غير متوفرة حالياً.');
   };
 
   const handleAuth = (e: React.FormEvent) => {

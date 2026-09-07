@@ -1,30 +1,9 @@
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { BarChart3, TrendingUp, PieChart as PieChartIcon } from 'lucide-react';
 
-const goalsByMatchData = [
-  { match: 'ج 1', goalsScored: 2, goalsConceded: 0 },
-  { match: 'ج 2', goalsScored: 1, goalsConceded: 1 },
-  { match: 'ج 3', goalsScored: 3, goalsConceded: 1 },
-  { match: 'ج 4', goalsScored: 0, goalsConceded: 2 },
-  { match: 'ج 5', goalsScored: 2, goalsConceded: 1 },
-  { match: 'ج 6', goalsScored: 1, goalsConceded: 0 },
-  { match: 'ج 7', goalsScored: 4, goalsConceded: 2 },
-];
-
-const resultsData = [
-  { name: 'فوز', value: 4, color: '#22c55e' }, // green-500
-  { name: 'تعادل', value: 2, color: '#eab308' }, // yellow-500
-  { name: 'خسارة', value: 1, color: '#ef4444' }, // red-500
-];
-
-const goalsByMinuteData = [
-  { time: '0-15', goals: 2 },
-  { time: '16-30', goals: 1 },
-  { time: '31-45', goals: 4 },
-  { time: '46-60', goals: 3 },
-  { time: '61-75', goals: 1 },
-  { time: '76-90+', goals: 5 },
-];
+const goalsByMatchData: any[] = [];
+const resultsData: any[] = [];
+const goalsByMinuteData: any[] = [];
 
 export default function SeasonStats() {
   return (
@@ -32,15 +11,15 @@ export default function SeasonStats() {
       {/* Overview Cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm">
-          <span className="text-2xl font-black text-yellow-500 mb-1">13</span>
+          <span className="text-2xl font-black text-zinc-500 mb-1">-</span>
           <span className="text-[10px] text-zinc-400 font-bold text-center">أهداف مسجلة</span>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm">
-          <span className="text-2xl font-black text-zinc-300 mb-1">7</span>
+          <span className="text-2xl font-black text-zinc-500 mb-1">-</span>
           <span className="text-[10px] text-zinc-400 font-bold text-center">أهداف مستقبلة</span>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm">
-          <span className="text-2xl font-black text-green-500 mb-1">4</span>
+          <span className="text-2xl font-black text-zinc-500 mb-1">-</span>
           <span className="text-[10px] text-zinc-400 font-bold text-center">شباك نظيفة</span>
         </div>
       </div>

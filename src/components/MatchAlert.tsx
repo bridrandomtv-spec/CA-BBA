@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { X, Calendar, Newspaper, Trophy, Goal } from 'lucide-react';
+import { X, Calendar, Newspaper, Trophy, Goal, Bell } from 'lucide-react';
 import {
   NOTIFICATIONS_UPDATED_EVENT,
   TRIGGER_NOTIFICATION_EVENT,
@@ -10,47 +10,23 @@ import {
 
 /** Durée d'affichage d'une alerte à l'écran. */
 const ALERT_DURATION_MS = 10_000;
-/** Fréquence de la simulation d'alertes (données de démonstration). */
-const SIMULATION_INTERVAL_MS = 60_000;
 
-type AlertKind = 'goal' | 'match' | 'news' | 'score';
+export type AlertKind = 'goal' | 'match' | 'news' | 'score';
 
-interface Alert {
+export interface Alert {
   type: AlertKind;
   title: string;
   message: string;
-  icon: ComponentType<{ size?: number }>;
 }
 
-/**
- * Alertes de démonstration, une par préférence activée.
- * À remplacer par de vraies notifications Push (voir README).
- */
-const ALERTS: Record<keyof NotificationSettings, Alert> = {
-  goals: {
-    type: 'goal',
-    title: 'هدف للكابا! ⚽',
-    message: 'الجراد الأصفر يسجل! هدف رائع يشعل المدرجات.',
-    icon: Goal,
-  },
-  matches: {
-    type: 'match',
-    title: 'تذكير بمباراة قادمة!',
-    message: 'تبدأ مباراة الكابا القادمة خلال 30 دقيقة. استعد لدعم فريقك!',
-    icon: Calendar,
-  },
-  teamNews: {
-    type: 'news',
-    title: 'خبر عاجل!',
-    message: 'الكابا يعلن عن تعاقد جديد لتعزيز صفوف الفريق الأول.',
-    icon: Newspaper,
-  },
-  finalScores: {
-    type: 'score',
-    title: 'نهاية المباراة!',
-    message: 'الكابا 2 - 0 شبيبة القبائل. فوز مستحق للجراد الأصفر!',
-    icon: Trophy,
-  },
+const getIconForType = (type: AlertKind) => {
+  switch (type) {
+    case 'goal': return Goal;
+    case 'match': return Calendar;
+    case 'news': return Newspaper;
+    case 'score': return Trophy;
+    default: return Bell;
+  }
 };
 
 export default function MatchAlert() {
@@ -66,45 +42,42 @@ export default function MatchAlert() {
   };
 
   useEffect(() => {
-    // Ne tirer que parmi les catégories réellement activées par l'utilisateur.
-    const enabled = (Object.keys(ALERTS) as Array<keyof NotificationSettings>).filter(
-      (key) => settings[key],
-    );
-
-    const showRandomAlert = () => {
-      if (enabled.length === 0) {
-        setAlert(null);
-        return;
+    const handleRealAlert = (event: Event) => {
+      const customEvent = event as CustomEvent<Alert>;
+      if (!customEvent.detail) return;
+      
+      const incomingAlert = customEvent.detail;
+      
+      // Filter by settings
+      const typeMapping: Record<AlertKind, keyof NotificationSettings> = {
+        goal: 'goals',
+        match: 'matches',
+        news: 'teamNews',
+        score: 'finalScores'
+      };
+      
+      const settingKey = typeMapping[incomingAlert.type];
+      if (settingKey && !settings[settingKey]) {
+        return; // User disabled this type
       }
 
-      setAlert(ALERTS[enabled[Math.floor(Math.random() * enabled.length)]]);
+      setAlert(incomingAlert);
 
-      // Le timer précédent doit être annulé, sinon une nouvelle alerte hérite du
-      // compte à rebours de l'ancienne et disparaît trop tôt.
       clearHideTimer();
       hideTimer.current = setTimeout(() => setAlert(null), ALERT_DURATION_MS);
     };
 
-    // Si l'utilisateur coupe toutes les catégories, l'alerte affichée s'efface.
-    if (enabled.length === 0) setAlert(null);
-
-    window.addEventListener(TRIGGER_NOTIFICATION_EVENT, showRandomAlert);
-    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, showRandomAlert);
-    const interval = setInterval(showRandomAlert, SIMULATION_INTERVAL_MS);
+    window.addEventListener(TRIGGER_NOTIFICATION_EVENT, handleRealAlert);
 
     return () => {
-      window.removeEventListener(TRIGGER_NOTIFICATION_EVENT, showRandomAlert);
-      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, showRandomAlert);
-      clearInterval(interval);
+      window.removeEventListener(TRIGGER_NOTIFICATION_EVENT, handleRealAlert);
       clearHideTimer();
     };
-    // `settings` en dépendance : sans lui, les écouteurs gardaient une copie
-    // périmée des préférences (stale closure) et ignoraient tout changement.
   }, [settings]);
 
   if (!alert) return null;
 
-  const AlertIcon = alert.icon;
+  const AlertIcon = getIconForType(alert.type);
 
   return (
     <div

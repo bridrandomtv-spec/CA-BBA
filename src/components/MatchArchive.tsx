@@ -11,12 +11,7 @@ interface ArchiveMatch {
   season: string;
 }
 
-const mockArchive: ArchiveMatch[] = [
-  { id: '1', date: '2023-05-15', opponent: 'مولودية الجزائر', score: '2 - 1', result: 'win', competition: 'الرابطة المحترفة الأولى', season: '2022/2023' },
-  { id: '2', date: '2023-03-22', opponent: 'شباب بلوزداد', score: '0 - 0', result: 'draw', competition: 'الرابطة المحترفة الأولى', season: '2022/2023' },
-  { id: '3', date: '2022-12-10', opponent: 'وفاق سطيف', score: '1 - 2', result: 'loss', competition: 'الرابطة المحترفة الأولى', season: '2022/2023' },
-  { id: '4', date: '2022-04-18', opponent: 'شبيبة القبائل', score: '3 - 1', result: 'win', competition: 'كأس الجمهورية', season: '2021/2022' },
-];
+const mockArchive: ArchiveMatch[] = [];
 
 export default function MatchArchive() {
   const [selectedSeason, setSelectedSeason] = useState('2022/2023');
@@ -89,18 +84,13 @@ export default function MatchArchive() {
                   <div className="bg-zinc-900 border border-zinc-700/50 rounded-xl p-4">
                     <h5 className="font-bold text-yellow-500 flex items-center gap-2 mb-3"><Users size={16} /> التشكيلة الأساسية</h5>
                     <ul className="text-zinc-300 text-xs space-y-2">
-                      <li>1. وليد عمار (حارس)</li>
-                      <li>5. عبد الله بن علي</li>
-                      <li>3. سفيان م.</li>
-                      <li>8. كريم ك.</li>
-                      <li>10. محمد بن يحيى (C)</li>
-                      <li>9. يوسف شيبان</li>
+                      <li className="text-zinc-500">لا توجد بيانات</li>
                     </ul>
                   </div>
                   <div className="bg-zinc-900 border border-zinc-700/50 rounded-xl p-4">
                     <h5 className="font-bold text-blue-400 flex items-center gap-2 mb-3"><FileText size={16} /> تقرير المباراة</h5>
                     <p className="text-zinc-400 text-xs leading-relaxed">
-                      مباراة قوية شهدت سيطرة الكابا في الشوط الأول. تم تسجيل الهدف الأول في الدقيقة 34 عبر تسديدة قوية من خارج منطقة الجزاء. في الشوط الثاني تراجع الأداء قليلاً لكن الدفاع صمد أمام هجمات الخصم.
+                      لا توجد بيانات
                     </p>
                   </div>
                 </div>
@@ -110,7 +100,7 @@ export default function MatchArchive() {
         )) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 flex flex-col items-center justify-center text-center">
             <History size={48} className="text-zinc-700 mb-4" />
-            <h4 className="font-bold text-zinc-400">لا توجد سجلات</h4>
+            <h4 className="font-bold text-zinc-400">سجل المباريات غير متوفر</h4>
             <p className="text-xs text-zinc-500 mt-2">لا تتوفر بيانات أرشيفية لهذا الموسم حتى الآن.</p>
           </div>
         )}
