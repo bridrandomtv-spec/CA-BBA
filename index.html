@@ -31,9 +31,12 @@
     <meta property="og:locale" content="ar_DZ" />
     <meta name="twitter:card" content="summary" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Polices auto-hébergées (public/fonts/) : l'ancien lien Google Fonts
+         exposait l'IP de chaque visiteur à un tiers (RGPD) et ajoutait une
+         requête bloquante ; la CSP durcie (font-src 'self') l'interdirait de
+         toute façon. Préchargement des deux graisses arabes du premier rendu. -->
+    <link rel="preload" href="/fonts/cairo-arabic-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/cairo-arabic-700.woff2" as="font" type="font/woff2" crossorigin>
     <style>
       /* var(--color-zinc-950) est redéfini par .theme-light : le fond du body
          suit donc le thème au lieu de rester noir en mode clair. */
