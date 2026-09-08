@@ -109,7 +109,7 @@ export default function MatchHighlights() {
             <X size={24} />
           </button>
           
-          <div className="w-full max-w-3xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-[0_0_50px_rgba(234,179,8,0.15)] \1
+          <div className="w-full max-w-3xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-[0_0_50px_rgba(234,179,8,0.15)] relative flex items-center justify-center group">
             {(() => {
               const active = highlights.find(h => h.id === playingId);
               if (!active?.videoUrl) {
@@ -131,7 +131,6 @@ export default function MatchHighlights() {
                   loading="lazy"
                 ></iframe>
               ) : (
-                // Fichier direct (R2/mp4) : lecteur natif, contrôles visibles.
                 <video src={active.videoUrl} controls autoPlay playsInline className="w-full h-full bg-black" />
               );
             })()}
