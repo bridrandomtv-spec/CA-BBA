@@ -20,6 +20,7 @@ import { pushRouter } from "./server/api/push.js";
 import { mediaRouter } from "./server/api/media.js";
 import { emailRouter } from "./server/api/email.js";
 import { analyticsRouter } from "./server/api/analytics.js";
+import { weatherRouter } from "./server/api/weather.js";
 import { startFootballScheduler, stopFootballScheduler } from "./server/football/scheduler.js";
 import { pool, query } from "./server/db/index.js";
 import { requestId, securityHeaders } from "./server/security.js";
@@ -85,6 +86,7 @@ app.use("/api/push", pushRouter);
 app.use("/api/media", mediaRouter);
 app.use("/api/email", emailRouter);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/weather", weatherRouter);
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY ?? "" });
 
