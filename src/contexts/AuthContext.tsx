@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+// Contexte d'authentification — logout toujours nettoyant.
+// L'ancienne version n'appelait setUserData(null) que si fetch ne rejetait
+// pas : hors ligne, l'utilisateur restait « connecté » avec une session morte
+// et chaque écran enchaînait les 401. Depuis le correctif token_version,
+// /logout est authentifié : une session déjà révoquée répond 401 — c'est
+// précisément le cas où l'état local doit être nettoyé.
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 interface UserData {
   id: string;
@@ -29,34 +35,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
       if (res.ok) {
         const data = await res.json();
         setUserData(data.user);
       } else {
         setUserData(null);
       }
-    } catch (e) {
+    } catch {
       setUserData(null);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchUser();
   }, []);
 
-  const logout = async () => {
+  useEffect(() => {
+    void fetchUser();
+  }, [fetchUser]);
+
+  const logout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+    } catch (error) {
+      console.error('[CABBA] logout : requête échouée, état local nettoyé quand même.', error);
+    } finally {
       setUserData(null);
-    } catch (e) {
-      console.error('Logout error', e);
     }
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ currentUser: userData, userData, loading, logout, refreshUser: fetchUser }}>
