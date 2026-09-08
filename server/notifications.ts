@@ -69,28 +69,36 @@ export async function getPushState(userId: string) {
   };
 }
 
+/** Délai par livraison : un push service muet ne suspend pas la boucle
+ *  séquentielle de broadcast (tous les pushes suivants attendraient). */
+const DELIVERY_TIMEOUT_MS = 10_000;
+
 async function deliverRows(rows: any[], payload: PushPayload) {
-  if (!configured) return { sent: 0, removed: 0 };
+  if (!configured) return { sent: 0, removed: 0, transientFailures: 0 };
   let sent = 0;
   let removed = 0;
+  let transientFailures = 0;
   const body = JSON.stringify(payload);
 
   for (const row of rows) {
     const subscription = { endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } };
     try {
-      await webpush.sendNotification(subscription, body, { TTL: 300 });
+      await webpush.sendNotification(subscription, body, { TTL: 300, timeout: DELIVERY_TIMEOUT_MS });
       await query('UPDATE push_subscriptions SET last_used_at=NOW() WHERE id=$1', [row.id]);
       sent++;
     } catch (error: any) {
       if (error?.statusCode === 404 || error?.statusCode === 410) {
+        // Abonnement mort : nettoyage définitif.
         await query('DELETE FROM push_subscriptions WHERE id=$1', [row.id]);
         removed++;
       } else {
+        // 429/5xx/timeout/réseau : transitoire — candidat au retry.
+        transientFailures++;
         console.error('[CABBA] Web Push delivery:', error?.message ?? error);
       }
     }
   }
-  return { sent, removed };
+  return { sent, removed, transientFailures };
 }
 
 export async function sendPushToUser(userId: string, category: PushCategory, eventKey: string, payload: PushPayload) {
@@ -101,8 +109,22 @@ export async function sendPushToUser(userId: string, category: PushCategory, eve
     [userId, category, eventKey],
   );
   if (!claim.rowCount) return { sent: 0, removed: 0, skipped: 'already_sent' as const };
+  const claimId = claim.rows[0].id;
   const subscriptions = await query('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id=$1 AND ' + categoryColumn(category) + '=TRUE', [userId]);
-  return deliverRows(subscriptions.rows, payload);
+  const result = await deliverRows(subscriptions.rows, payload);
+
+  // Rien n'est parti ET au moins un échec transitoire : on rend la claim pour
+  // que le prochain passage du scheduler retente. Sans cela, un but notifié
+  // pendant une panne du push service était perdu à jamais (la ligne
+  // event_key restait acquise → « already_sent »). Un utilisateur sans
+  // abonnement (sent=0, transientFailures=0) GARDE sa claim : rien à livrer.
+  if (result.sent === 0 && result.transientFailures > 0) {
+    await query('DELETE FROM push_notification_log WHERE id=$1', [claimId]).catch(() => {
+      // Libération best-effort : au pire, la notification de ce tick est perdue.
+    });
+  }
+
+  return { sent: result.sent, removed: result.removed };
 }
 
 function categoryColumn(category: PushCategory) {
@@ -131,6 +153,14 @@ export async function broadcastPush(category: PushCategory, eventKey: string, pa
     const result = await deliverRows([row], payload);
     sent += result.sent;
     removed += result.removed;
+    if (result.sent === 0 && result.transientFailures > 0) {
+      // Même politique par appareil : la claim de CE user est rendue pour
+      // permettre un retry au prochain événement/tick.
+      await query(
+        `DELETE FROM push_notification_log WHERE user_id=$1 AND category=$2 AND event_key=$3`,
+        [row.user_id, category, eventKey],
+      ).catch(() => {});
+    }
   }
   return { sent, users, removed };
 }

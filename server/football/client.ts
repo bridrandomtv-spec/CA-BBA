@@ -67,6 +67,15 @@ export async function footballApi<T = unknown>(
     }
     return body as T;
   } catch (error) {
+    // Connexion jamais établie (DNS refusé, TCP reset → TypeError de fetch) :
+    // la requête n'a pas atteint le fournisseur, elle ne consomme aucun quota
+    // réel — on rend l'unité au budget local. Distinction volontairement
+    // prudente : AbortError (timeout) et erreurs HTTP (réponse reçue) restent
+    // comptées, le fournisseur a peut-être traité l'appel.
+    if (error instanceof TypeError) {
+      usedToday = Math.max(0, usedToday - 1);
+      throw new FootballApiError(`API-Football unreachable: ${error.message}`);
+    }
     if (error instanceof FootballApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
       throw new FootballApiError('API-Football request timed out');

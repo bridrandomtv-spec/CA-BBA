@@ -8,6 +8,16 @@ import NotificationSettings from './NotificationSettings';
 import Achievements from './Achievements';
 import { QRCodeSVG } from 'qrcode.react';
 import { useTheme } from '../ThemeContext';
+import { clearAnalyticsConsent, getAnalyticsConsent } from '../lib/consent';
+
+// Avatar de repli LOCAL (data-URI aux couleurs du club) : l'ancien repli
+// dicebear.com exposait l'IP des visiteurs à un serveur tiers à chaque
+// rendu du profil — même raisonnement que Google Fonts et Unsplash.
+const DEFAULT_AVATAR =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#27272a"/><text x="32" y="43" font-family="system-ui,sans-serif" font-size="30" font-weight="800" fill="#eab308" text-anchor="middle">C</text></svg>`,
+  );
 
 export default function Profile() {
   const { theme, toggleTheme } = useTheme();
@@ -24,9 +34,79 @@ export default function Profile() {
       .catch(() => setMembership(null));
   }, [currentUser]);
 
+  // Points de loyauté RÉELS : ceux du jeu de pronostics (50 pts / score
+  // exact, /api/predictions). L'ancien « 1,450 نقطة / المستوى 4 » était
+  // une constante inventée, identique pour tous les comptes.
+  const [loyalty, setLoyalty] = useState<{ points: number; correct: number; rank: number | null } | null>(null);
+  const [consentChoice, setConsentChoice] = useState(getAnalyticsConsent());
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [rgpdNotice, setRgpdNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/predictions', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.me) setLoyalty({ points: data.me.points, correct: data.me.correct, rank: data.me.rank });
+      })
+      .catch(() => { /* la gamification ne doit jamais casser le profil */ });
+  }, []);
+
+  useEffect(() => {
+    if (!rgpdNotice) return;
+    const timer = setTimeout(() => setRgpdNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [rgpdNotice]);
+
+  const handleExport = async () => {
+    setAccountBusy(true);
+    try {
+      const res = await fetch('/api/auth/export', { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`export → ${res.status}`);
+      // Content-Disposition: attachment — mais le téléchargement programmatique
+      // reste nécessaire dans une PWA installée (pas de barre de navigateur).
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `cabba-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('[CABBA] export:', error);
+      setRgpdNotice('تعذر تصدير البيانات.');
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    // Double étape : le premier clic arme la confirmation, le second exécute.
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setAccountBusy(true);
+    try {
+      const res = await fetch('/api/auth/account', { method: 'DELETE', credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`delete → ${res.status}`);
+      // Le serveur a invalidé la session (token_version) et supprimé le
+      // cookie : cleanup local → retour automatique à l'écran Login.
+      await logout();
+    } catch (error) {
+      console.error('[CABBA] account deletion:', error);
+      setRgpdNotice('تعذر حذف الحساب.');
+      setConfirmDelete(false);
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
   const [userName, setUserName] = useState(userData?.displayName || currentUser?.displayName || 'المستخدم');
   const [userEmail, setUserEmail] = useState(currentUser?.email || '');
-  const [userAvatar, setUserAvatar] = useState(currentUser?.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData?.displayName || 'User'}&backgroundColor=f59e0b`);
+  const [userAvatar, setUserAvatar] = useState(currentUser?.avatarUrl || DEFAULT_AVATAR);
   
   const [editName, setEditName] = useState(userName);
   const [editEmail, setEditEmail] = useState(userEmail);
@@ -259,8 +339,26 @@ export default function Profile() {
         
         <div className="relative z-10 flex justify-between items-start mb-8">
           <div>
-            <h2 className="text-yellow-500 font-bold tracking-widest text-sm mb-1 uppercase">عضوية شرفية</h2>
-            <div className="text-white text-2xl font-black font-mono">CABBA-8291-04</div>
+            <h2 className="text-yellow-500 font-bold tracking-widest text-sm mb-1 uppercase">
+              {membership
+                ? (membership.type === 'vip' ? 'عضوية VIP' : membership.type === 'gold' ? 'عضوية ذهبية' : 'عضوية شرفية')
+                : 'بطاقة الانخراط'}
+            </h2>
+            {/* Le VRAI numéro, unique par adhérent (contrainte UNIQUE en base).
+                L'ancien « CABBA-8291-04 » était identique pour tout le monde. */}
+            <div className="text-white text-2xl font-black font-mono" dir="ltr">
+              {membership?.memberNumber ?? '—'}
+            </div>
+            {membership?.expirationDate && (
+              <p className="text-[10px] text-zinc-500 mt-1">
+                صالحة حتى {new Date(membership.expirationDate).toLocaleDateString('ar-DZ')}
+                {membership.status !== 'active' && (
+                  <span className="text-yellow-500 font-bold">
+                    {' · '}{membership.status === 'pending' ? 'قيد التفعيل' : membership.status === 'suspended' ? 'موقوفة' : 'منتهية'}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-black">
             <span className="font-bold text-black text-xl">C</span>
@@ -278,9 +376,18 @@ export default function Profile() {
             </div>
           </div>
           
-          <div className="p-2 rounded-xl" style={{ backgroundColor: "#ffffff" }}>
-            <QRCodeSVG value="CABBA-FAN-847291" size={48} />
-          </div>
+          {membership?.memberNumber ? (
+            <div className="p-2 rounded-xl" style={{ backgroundColor: "#ffffff" }}>
+              {/* QR = numéro d'adhésion réel : scannable au stade pour
+                  identifier le compte (la valeur statique précédente
+                  « CABBA-FAN-847291 » n'identifiait PERSONNE). */}
+              <QRCodeSVG value={membership.memberNumber} size={48} />
+            </div>
+          ) : (
+            <p className="text-[10px] text-zinc-500 max-w-[110px] leading-relaxed">
+              لا توجد عضوية نشطة — تواصل مع إدارة النادي لتفعيل انخراطك
+            </p>
+          )}
         </div>
       </div>
 
@@ -364,22 +471,73 @@ export default function Profile() {
               <Award className="text-yellow-500" size={24} />
             </div>
             <div>
-              <h3 className="font-bold text-white text-lg">1,450 نقطة</h3>
-              <p className="text-xs text-zinc-400">نقاط الولاء (الجراد الأصفر)</p>
+              <h3 className="font-bold text-white text-lg">{loyalty ? `${loyalty.points} نقطة` : '— نقطة'}</h3>
+              <p className="text-xs text-zinc-400">نقاط التوقعات (50 نقطة للنتيجة الصحيحة)</p>
             </div>
           </div>
           <div className="text-left">
-            <span className="bg-zinc-800 text-white text-xs font-bold px-3 py-1 rounded-full">المستوى 4</span>
+            {loyalty && (
+              <span className="bg-zinc-800 text-white text-xs font-bold px-3 py-1 rounded-full">
+                المستوى {Math.floor(loyalty.points / 100) + 1}
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="space-y-3">
-        </div>
+        {loyalty?.rank != null && (
+          <p className="text-[10px] text-zinc-500 text-center">
+            ترتيبك في لوحة الصدارة: #{loyalty.rank} · {loyalty.correct} توقع صحيح
+          </p>
+        )}
       </div>
 
 
       {/* Badges Section */}
       <Achievements />
+
+      {/* بياناتي — droits RGPD (export + effacement) */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm">
+        <h3 className="font-bold text-white text-lg mb-4">بياناتي</h3>
+
+        {rgpdNotice && (
+          <div role="status" aria-live="polite" className="mb-3 p-3 rounded-xl border text-xs font-bold bg-red-500/10 border-red-500/30 text-red-400 animate-in fade-in duration-200">
+            {rgpdNotice}
+          </div>
+        )}
+
+        <button
+          onClick={() => void handleExport()}
+          disabled={accountBusy}
+          className="w-full bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 p-4 rounded-xl flex items-center justify-between transition-colors group disabled:opacity-50"
+        >
+          <span className="text-sm text-white font-medium group-hover:text-yellow-500 transition-colors">
+            تصدير بياناتي (JSON)
+          </span>
+          <ChevronLeft size={16} className="text-zinc-600 group-hover:text-yellow-500 transition-colors" />
+        </button>
+
+        <button
+          onClick={() => void handleDeleteAccount()}
+          disabled={accountBusy}
+          className={`w-full mt-2 p-4 rounded-xl flex items-center justify-between transition-colors disabled:opacity-50 ${
+            confirmDelete
+              ? 'bg-red-500/15 border border-red-500/40 hover:bg-red-500/25'
+              : 'bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 group'
+          }`}
+        >
+          <span className={`text-sm font-medium ${confirmDelete ? 'text-red-400 font-bold' : 'text-white group-hover:text-red-400'} transition-colors`}>
+            {confirmDelete ? 'تأكيد الحذف النهائي — لا يمكن التراجع!' : 'حذف حسابي نهائياً'}
+          </span>
+          <ChevronLeft size={16} className={confirmDelete ? 'text-red-400' : 'text-zinc-600 group-hover:text-red-400 transition-colors'} />
+        </button>
+
+        {confirmDelete && (
+          <p className="text-[10px] text-zinc-500 px-2 mt-2 leading-relaxed">
+            سيتم إخفاء هويتك وحذف منشوراتك ووسائطك وإشعاراتك. الطلبات السابقة
+            تُحفظ لأغراض محاسبية دون ارتباط بهويتك. اضغط الزر مرة أخرى للتأكيد.
+          </p>
+        )}
+      </div>
 
       {/* Theme Setting */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm flex items-center justify-between">
@@ -415,6 +573,22 @@ export default function Profile() {
         </button>
 
         <NotificationSettings />
+
+        {/* Correctif RGPD : retrait du consentement analytics. */}
+        {consentChoice === 'granted' && (
+          <button
+            onClick={() => {
+              clearAnalyticsConsent();
+              setConsentChoice(null);
+            }}
+            className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800/50 p-4 rounded-xl flex items-center justify-between transition-colors group"
+          >
+            <span className="text-sm text-white font-medium group-hover:text-yellow-500 transition-colors">
+              سحب الموافقة على الإحصائيات
+            </span>
+            <ChevronLeft size={16} className="text-zinc-600 group-hover:text-yellow-500 transition-colors" />
+          </button>
+        )}
 
         <button 
           onClick={() => setActiveModal('language')}

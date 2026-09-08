@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
-import { requireAdmin } from '../auth.js';
+import { requireAdmin, requireAuth } from '../auth.js';
+import { isValidationError, requireString, requireDateString, requireHttpUrl } from './validate.js';
 import { footballEvents } from '../football/events.js';
 
 export const matchesRouter = Router();
@@ -131,14 +132,30 @@ matchesRouter.get('/highlights/all', async (req, res) => {
 
 matchesRouter.post('/highlights', requireAdmin, async (req, res) => {
   try {
-    const { title, match, date, duration, thumbnail, videoUrl } = req.body;
+    const { title, match, date, duration, thumbnail, videoUrl } = req.body ?? {};
+
+    // Validation typée + bornée au schéma (title/match_title VARCHAR(255),
+    // duration VARCHAR(20), thumbnail VARCHAR(1024), highlight_date DATE) :
+    // sans elle, une chaîne trop longue remontait en erreur pg 22001 → 500,
+    // et n'importe quelle URL (y compris javascript:) partait en base puis
+    // dans l'iframe/le <video> de MatchHighlights.
+    const cleanTitle = requireString(title, 'title', 255);
+    const cleanMatch = requireString(match, 'match', 255);
+    const cleanDate = requireDateString(date, 'date');
+    const cleanDuration = requireString(duration, 'duration', 20);
+    const cleanThumbnail = requireHttpUrl(requireString(thumbnail, 'thumbnail', 1024), 'thumbnail');
+    const cleanVideoUrl = videoUrl
+      ? requireHttpUrl(requireString(videoUrl, 'videoUrl', 1024), 'videoUrl')
+      : null;
+
     const result = await query(
       `INSERT INTO match_highlights (title, match_title, highlight_date, duration, thumbnail, video_url)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, match, date, duration, thumbnail, videoUrl]
+      [cleanTitle, cleanMatch, cleanDate, cleanDuration, cleanThumbnail, cleanVideoUrl]
     );
     res.status(201).json({ id: result.rows[0].id });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error adding highlight:', error);
     res.status(500).json({ error: 'Failed to add highlight' });
   }
@@ -241,5 +258,103 @@ matchesRouter.get('/:id/stream', async (req, res) => {
   } catch (error) {
     console.error('[CABBA] SSE match stream:', error);
     if (!res.headersSent) res.status(500).json({ error: 'Failed to open match stream' });
+  }
+});
+
+
+// ============================ MVP (« رجل المباراة ») ============================
+// Le vote MVP vivait dans un useState local avec une liste vide : rien
+// n'était agrégé. Candidats = titulaires réels (match_lineups), votes
+// persistés (migration 015), un vote modifiable par compte et par match.
+
+matchesRouter.get('/:id/mvp', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const matchResult = await query(
+      `SELECT id, home_team, away_team, status, home_team_api_id, away_team_api_id
+       FROM matches WHERE id=$1 LIMIT 1`,
+      [req.params.id],
+    );
+    if (!matchResult.rowCount) { res.status(404).json({ error: 'Match not found' }); return; }
+    const m = matchResult.rows[0];
+
+    const candidates = await query(
+      `SELECT l.player_api_id, l.player_name, l.number, l.position, l.team_api_id,
+              COUNT(v.id)::int AS votes,
+              BOOL_OR(v.user_id = $2) AS my_vote
+       FROM match_lineups l
+       LEFT JOIN match_mvp_votes v
+              ON v.match_id = l.match_id AND v.player_api_id = l.player_api_id
+       WHERE l.match_id = $1 AND l.starter = TRUE AND l.player_api_id IS NOT NULL
+       GROUP BY l.player_api_id, l.player_name, l.number, l.position, l.team_api_id
+       ORDER BY votes DESC, l.player_name ASC`,
+      [req.params.id, req.user!.id],
+    );
+
+    res.json({
+      match: {
+        id: m.id,
+        homeTeam: m.home_team,
+        awayTeam: m.away_team,
+        status: m.status,
+        homeTeamApiId: m.home_team_api_id,
+        awayTeamApiId: m.away_team_api_id,
+      },
+      candidates: candidates.rows.map((row) => ({
+        playerApiId: row.player_api_id,
+        playerName: row.player_name,
+        number: row.number,
+        position: row.position,
+        teamApiId: row.team_api_id,
+        votes: Number(row.votes),
+        isMyVote: Boolean(row.my_vote),
+      })),
+    });
+  } catch (error) {
+    console.error('[CABBA] mvp candidates:', error);
+    res.status(500).json({ error: 'Failed to fetch MVP candidates' });
+  }
+});
+
+matchesRouter.post('/:id/mvp/vote', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const playerApiId = Number((req.body ?? {}).playerApiId);
+    if (!Number.isInteger(playerApiId) || playerApiId <= 0) {
+      res.status(400).json({ error: 'playerApiId invalide.' });
+      return;
+    }
+
+    const matchResult = await query('SELECT status FROM matches WHERE id=$1 LIMIT 1', [req.params.id]);
+    if (!matchResult.rowCount) { res.status(404).json({ error: 'Match not found' }); return; }
+    if (!['live', 'finished'].includes(matchResult.rows[0].status)) {
+      res.status(409).json({ error: 'التصويت متاح أثناء المباراة وبعدها فقط.' });
+      return;
+    }
+
+    // Anti-forge : le joueur doit EXISTER dans les compositions du match.
+    const playerResult = await query(
+      `SELECT player_name FROM match_lineups
+       WHERE match_id=$1 AND player_api_id=$2 AND starter = TRUE
+       LIMIT 1`,
+      [req.params.id, playerApiId],
+    );
+    if (!playerResult.rowCount) {
+      res.status(404).json({ error: 'اللاعب غير موجود ضمن التشكيلة الأساسية.' });
+      return;
+    }
+
+    await query(
+      `INSERT INTO match_mvp_votes (match_id, user_id, player_api_id, player_name)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (match_id, user_id) DO UPDATE
+         SET player_api_id = EXCLUDED.player_api_id,
+             player_name = EXCLUDED.player_name,
+             created_at = NOW()`,
+      [req.params.id, req.user!.id, playerApiId, playerResult.rows[0].player_name],
+    );
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('[CABBA] mvp vote:', error);
+    res.status(500).json({ error: 'Failed to record vote' });
   }
 });

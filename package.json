@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild scripts/football-worker.mts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/football-worker.cjs && esbuild server/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild scripts/football-worker.mts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/football-worker.cjs && esbuild server/db/migrate.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/migrate.cjs && esbuild scripts/analytics-retention.mts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/retention.cjs",
     "start": "node dist/server.cjs",
     "start:football-worker": "NODE_ENV=production FOOTBALL_SCHEDULER_ENABLED=true node dist/football-worker.cjs",
     "migrate:production": "node -e \"if(process.env.NODE_ENV !== 'production') process.exit(1)\" && node dist/migrate.cjs",
@@ -15,14 +15,16 @@
     "typecheck": "tsc --noEmit",
     "tidy": "node scripts/tidy-root.mjs",
     "test": "node --test",
-    "test:db": "node --import tsx --test tests/db/auth-register.mts",
+    "test:db": "node --import tsx --test tests/db/auth-register.mts tests/db/auth-logout.mts tests/db/auth-gdpr.mts",
     "migrate": "tsx server/db/migrate.ts",
     "football:verify": "tsx scripts/verify-football.mts",
     "football:sync": "tsx scripts/sync-football.mts",
     "vapid:generate": "node scripts/generate-vapid.mjs",
     "football:worker": "tsx scripts/football-worker.mts",
     "promote:admin": "tsx scripts/promote-admin.mts",
-    "create:admin": "tsx scripts/create-admin.mts"
+    "create:admin": "tsx scripts/create-admin.mts",
+    "retention": "tsx scripts/analytics-retention.mts",
+    "retention:production": "node dist/retention.cjs"
   },
   "dependencies": {
     "@google/genai": "^2.13.0",

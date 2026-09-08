@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin } from '../auth.js';
+import { isValidationError, LIMITS, requireString, optionalHttpUrl } from './validate.js';
 
 export const newsRouter = Router();
 
@@ -31,10 +32,12 @@ newsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promise<
   try {
     const { title, content, imageUrl } = req.body;
     
-    if (!title || !content) {
-      res.status(400).json({ error: 'Missing required fields' });
-      return;
-    }
+    // Validation typée et bornée au schéma : `!title` acceptait 123 (stocké
+    // « 123 ») ou un objet (pg levait → 500). title > 255 (VARCHAR(255))
+    // produisait une erreur 22001 → 500 illisible pour l'admin.
+    const cleanTitle = requireString(title, 'title', LIMITS.title);
+    const cleanContent = requireString(content, 'content', LIMITS.text);
+    const cleanImageUrl = optionalHttpUrl(imageUrl, 'imageUrl');
 
     const date = new Date().toISOString().split('T')[0];
 
@@ -42,7 +45,7 @@ newsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promise<
       `INSERT INTO news (title, content, image_url, date)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [title, content, imageUrl || null, date]
+      [cleanTitle, cleanContent, cleanImageUrl, date]
     );
 
     const row = result.rows[0];
@@ -57,6 +60,7 @@ newsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promise<
       }
     });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error creating news:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -68,16 +72,18 @@ newsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): Prom
     const { id } = req.params;
     const { title, content, imageUrl } = req.body;
 
-    if (!title || !content) {
-      res.status(400).json({ error: 'Missing required fields' });
-      return;
-    }
+    // Validation typée et bornée au schéma : `!title` acceptait 123 (stocké
+    // « 123 ») ou un objet (pg levait → 500). title > 255 (VARCHAR(255))
+    // produisait une erreur 22001 → 500 illisible pour l'admin.
+    const cleanTitle = requireString(title, 'title', LIMITS.title);
+    const cleanContent = requireString(content, 'content', LIMITS.text);
+    const cleanImageUrl = optionalHttpUrl(imageUrl, 'imageUrl');
 
     const result = await query(
       `UPDATE news SET title = $1, content = $2, image_url = $3, updated_at = NOW()
        WHERE id = $4
        RETURNING *`,
-      [title, content, imageUrl || null, id]
+      [cleanTitle, cleanContent, cleanImageUrl, id]
     );
 
     if (result.rows.length === 0) {
@@ -97,6 +103,7 @@ newsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): Prom
       }
     });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error updating news:', error);
     res.status(500).json({ error: 'Internal server error' });
   }

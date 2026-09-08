@@ -9,7 +9,12 @@
  * Incrémenter CACHE_VERSION à chaque déploiement qui change l'app shell.
  */
 
-const CACHE_VERSION = 'v3';
+// `__BUILD_ID__` est remplacé par un hash unique à chaque `npm run build`
+// (plugin cabba-sw-version dans vite.config.ts) : plus besoin d'incrémenter
+// CACHE_VERSION à la main. Si le placeholder survit (service direct de
+// public/ hors build), la version reste stable — sans conséquence, le SW
+// n'étant enregistré qu'en production.
+const CACHE_VERSION = '__BUILD_ID__';
 const STATIC_CACHE = `cabba-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cabba-runtime-${CACHE_VERSION}`;
 const OFFLINE_URL = '/index.html';
@@ -124,11 +129,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Fichiers du site + polices Google (même stratégie, elles sont immuables).
+  // Fichiers du site (polices Cairo comprises — auto-hébergées, la branche
+  // Google Fonts n'a plus de raison d'être et laisserait le worker mettre en
+  // cache des réponses opaques d'un tiers qui n'est plus jamais contacté).
   const sameOrigin = url.origin === self.location.origin;
-  const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
 
-  if ((sameOrigin && isStaticAsset(request)) || isFont) {
+  if (sameOrigin && isStaticAsset(request)) {
     event.respondWith(staleWhileRevalidate(request));
   }
 });

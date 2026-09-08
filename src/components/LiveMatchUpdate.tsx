@@ -21,12 +21,17 @@ export default function LiveMatchUpdate({ matchId }: { matchId?: string }) {
       setLoading(false);
       return;
     }
+
+    let interval: ReturnType<typeof setInterval> | null = null;
+
     const fetchUpdates = async () => {
       try {
-        const res = await fetch(`/api/matches/${matchId}/updates`);
+        const res = await fetch(`/api/matches/${encodeURIComponent(matchId)}/updates`, {
+          credentials: 'same-origin',
+        });
         if (res.ok) {
           const data = await res.json();
-          setCommentaries(data);
+          setCommentaries(Array.isArray(data) ? data : []);
         }
       } catch (error) {
         console.error("Error fetching match updates:", error);
@@ -34,10 +39,31 @@ export default function LiveMatchUpdate({ matchId }: { matchId?: string }) {
         setLoading(false);
       }
     };
-    fetchUpdates();
-    // In a real app we'd use polling or websockets here. For now, fetch once.
-    const interval = setInterval(fetchUpdates, 30000);
-    return () => clearInterval(interval);
+
+    // Polling conscient de la visibilité : l'intervalle de 30 s tournait
+    // onglet masqué — sur une PWA mobile, batterie et data consommées pour
+    // un fil que personne ne regarde (le flux score/statistiques, lui, passe
+    // déjà par SSE avec la même politique dans MatchCenter).
+    const start = () => {
+      if (interval) return;
+      interval = setInterval(fetchUpdates, 30000);
+      void fetchUpdates();
+    };
+    const stop = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+      else start(); // fetch immédiat : rattrape les commentaires manqués.
+    };
+
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [matchId]);
 
   const getIcon = (type: Commentary['type']) => {

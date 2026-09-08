@@ -1,0 +1,36 @@
+# Job Cloud Run de purge RGPD (analytics_events + push_notification_log).
+# Même modèle que cabba-migrations : image de la release, une tâche, pas de
+# service HTTP. Planifié par Cloud Scheduler (commande en bas de fichier).
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: cabba-retention
+  labels:
+    app: cabba
+spec:
+  template:
+    spec:
+      taskCount: 1
+      maxRetries: 1           # une purge ratée se rattrape le lendemain
+      timeout: 600s
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/cabba:TAG
+          args: ["dist/retention.cjs"]
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: ANALYTICS_RETENTION_DAYS
+              value: "90"
+            - name: PUSH_LOG_RETENTION_DAYS
+              value: "90"
+          resources:
+            limits:
+              cpu: "1"
+              memory: 512Mi
+# Planification (une fois, par environnement) :
+#   gcloud scheduler jobs create http cabba-retention-daily \
+#     --schedule "0 3 * * *" \
+#     --time-zone "Africa/Algiers" \
+#     --uri "https://REGION-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/PROJECT_ID/jobs/cabba-retention:run" \
+#     --http-method POST \
+#     --oauth-service-account-email SERVICE_ACCOUNT@PROJECT_ID.iam.gserviceaccount.com

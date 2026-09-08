@@ -24,17 +24,23 @@ const lineupsSynced = new Set<number>();
 
 async function sendUpcomingMatchReminders() {
   try {
+    // match_date/match_time stockent l'heure LOCALE algérienne (sync.ts) :
+    // NOW() (UTC sur Cloud Run) doit être converti dans le même référentiel,
+    // sinon la fenêtre « 25-35 min » tombe une heure à côté et les rappels
+    // ne partent jamais au bon moment.
     const result = await query<{ id:string; home_team:string; away_team:string; match_date:string; match_time:string }>(
       `SELECT id, home_team, away_team, match_date, match_time FROM matches
        WHERE status='scheduled' AND match_date IS NOT NULL AND match_time IS NOT NULL
-       AND ((match_date::date + match_time::time) BETWEEN NOW() + INTERVAL '25 minutes' AND NOW() + INTERVAL '35 minutes')
+       AND ((match_date::date + match_time::time)
+            BETWEEN (NOW() AT TIME ZONE 'Africa/Algiers') + INTERVAL '25 minutes'
+                AND (NOW() AT TIME ZONE 'Africa/Algiers') + INTERVAL '35 minutes')
        ORDER BY match_date, match_time`,
     );
     for (const match of result.rows) {
       await broadcastPush('matches', `match-reminder-${match.id}-${match.match_date}-${match.match_time}`, {
         title: 'مباراة الكابا بعد قليل! 🟡⚫',
         body: `${match.home_team} ضد ${match.away_team} تبدأ خلال حوالي 30 دقيقة.`,
-        url: '/?tab=match', tag: `cabba-reminder-${match.id}`, data: { url: '/?tab=match', matchId: match.id },
+        url: '/#/match', tag: `cabba-reminder-${match.id}`, data: { url: '/#/match', matchId: match.id },
       });
     }
   } catch (error) { console.error('[CABBA] match reminder push:', error); }

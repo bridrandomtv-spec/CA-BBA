@@ -1,8 +1,19 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin } from '../auth.js';
+import { createRateLimiter } from '../rateLimit.js';
+import { isValidationError, LIMITS, requireString, requireHttpUrl, optionalHttpUrl } from './validate.js';
 
 export const chantsRouter = Router();
+
+/** Lectures audio : 30/min/IP (relectures légitimes larges, script de
+ *  gonflement exclu). */
+const viewRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  limit: 30,
+  message: 'Trop de lectures comptabilisées. Réessayez dans une minute.',
+  keyPrefix: 'chant-view',
+});
 
 // GET all chants
 chantsRouter.get('/', async (req: Request, res: Response): Promise<void> => {
@@ -32,16 +43,19 @@ chantsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promis
   try {
     const { title, lyrics, audioUrl, imageUrl, category } = req.body;
     
-    if (!title || !lyrics || !audioUrl || !category) {
-      res.status(400).json({ error: 'Missing required fields' });
-      return;
-    }
+    // Validation typée + bornée au schéma (title/category VARCHAR, audio_url
+    // TEXT mais http(s) obligatoire — un `javascript:` stocké serait servi).
+    const cleanTitle = requireString(title, 'title', LIMITS.title);
+    const cleanLyrics = requireString(lyrics, 'lyrics', LIMITS.text);
+    const cleanAudioUrl = requireHttpUrl(audioUrl, 'audioUrl');
+    const cleanImageUrl = optionalHttpUrl(imageUrl, 'imageUrl');
+    const cleanCategory = requireString(category, 'category', LIMITS.category);
 
     const result = await query(
       `INSERT INTO chants (title, lyrics, audio_url, image_url, category)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [title, lyrics, audioUrl, imageUrl || null, category]
+      [cleanTitle, cleanLyrics, cleanAudioUrl, cleanImageUrl, cleanCategory]
     );
 
     const row = result.rows[0];
@@ -58,6 +72,7 @@ chantsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promis
       }
     });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error creating chant:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -69,16 +84,19 @@ chantsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): Pr
     const { id } = req.params;
     const { title, lyrics, audioUrl, imageUrl, category } = req.body;
 
-    if (!title || !lyrics || !audioUrl || !category) {
-      res.status(400).json({ error: 'Missing required fields' });
-      return;
-    }
+    // Validation typée + bornée au schéma (title/category VARCHAR, audio_url
+    // TEXT mais http(s) obligatoire — un `javascript:` stocké serait servi).
+    const cleanTitle = requireString(title, 'title', LIMITS.title);
+    const cleanLyrics = requireString(lyrics, 'lyrics', LIMITS.text);
+    const cleanAudioUrl = requireHttpUrl(audioUrl, 'audioUrl');
+    const cleanImageUrl = optionalHttpUrl(imageUrl, 'imageUrl');
+    const cleanCategory = requireString(category, 'category', LIMITS.category);
 
     const result = await query(
       `UPDATE chants SET title = $1, lyrics = $2, audio_url = $3, image_url = $4, category = $5, updated_at = NOW()
        WHERE id = $6
        RETURNING *`,
-      [title, lyrics, audioUrl, imageUrl || null, category, id]
+      [cleanTitle, cleanLyrics, cleanAudioUrl, cleanImageUrl, cleanCategory, id]
     );
 
     if (result.rows.length === 0) {
@@ -100,6 +118,7 @@ chantsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): Pr
       }
     });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error updating chant:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -125,7 +144,7 @@ chantsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response): P
 });
 
 // POST increment views
-chantsRouter.post('/:id/view', async (req: Request, res: Response): Promise<void> => {
+chantsRouter.post('/:id/view', viewRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     

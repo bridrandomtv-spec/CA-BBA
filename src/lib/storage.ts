@@ -22,6 +22,17 @@ export const STORAGE_KEYS = {
   favorites: 'cabba_favorites',
   appLang: 'cabba-app-lang',
   userAvatar: 'cabba-user-avatar',
+  /**
+   * Consentement analytics (RGPD) : 'granted' | 'denied' ;
+   * clé absente = aucun choix, le bandeau s'affiche.
+   */
+  analyticsConsent: 'cabba-consent-analytics',
+  /**
+   * Conversation de l'assistant IA : les 40 derniers tours, par appareil.
+   * Sérialisée en JSON avec timestamps ISO — les `Date` ne survivent pas
+   * telles quelles à localStorage.
+   */
+  assistantHistory: 'cabba-assistant-history',
 } as const;
 
 export function readString(key: string): string | null {

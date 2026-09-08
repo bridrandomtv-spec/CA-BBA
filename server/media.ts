@@ -15,11 +15,18 @@ const MAX_BYTES: Record<string, number> = {
   audio: 50 * 1024 * 1024,
 };
 
+// Client mémoïsé : l'ancien getClient() construisait un NOUVEAU S3Client à
+// chaque presign et chaque delete — résolution de credentials et pool HTTP
+// recréés par appel. Le client est immuable une fois R2 configuré (les
+// credentials viennent de env, validé au démarrage).
+let cachedClient: S3Client | null = null;
+
 function getClient(): S3Client {
+  if (cachedClient) return cachedClient;
   if (!env.r2AccountId || !env.r2AccessKeyId || !env.r2SecretAccessKey || !env.r2Bucket) {
     throw new Error('R2_NOT_CONFIGURED');
   }
-  return new S3Client({
+  cachedClient = new S3Client({
     region: 'auto',
     endpoint: `https://${env.r2AccountId}.r2.cloudflarestorage.com`,
     credentials: {
@@ -27,6 +34,7 @@ function getClient(): S3Client {
       secretAccessKey: env.r2SecretAccessKey,
     },
   });
+  return cachedClient;
 }
 
 function mediaKind(contentType: string): 'image' | 'video' | 'audio' | null {
