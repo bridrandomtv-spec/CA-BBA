@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { createUploadUrl, deleteMedia, isR2Configured, publicMediaUrl } from '../media.js';
+import { createRateLimiter } from '../rateLimit.js';
 
 export const mediaRouter = Router();
 
@@ -9,10 +10,23 @@ mediaRouter.get('/config', (_req: Request, res: Response): void => {
   res.json({ configured: isR2Configured(), publicBaseUrlConfigured: Boolean(publicMediaUrl('health-check')) });
 });
 
-mediaRouter.post('/presign', requireAuth, async (req: Request, res: Response): Promise<void> => {
+/** 30 presign/heure/compte : sans quota, un compte pouvait créer des
+ *  milliers de lignes `pending` (stockage mort + table gonflée). */
+const presignRateLimit = createRateLimiter({
+  windowMs: 60 * 60_000,
+  limit: 30,
+  message: 'عمليات رفع كثيرة هذا الساعة. حاول لاحقاً.',
+  keyPrefix: 'media-presign',
+  keyFn: (req) => req.user?.id ?? req.ip ?? 'unknown',
+});
+
+mediaRouter.post('/presign', requireAuth, presignRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
     const { fileName, contentType, size, folder } = req.body ?? {};
-    if (typeof fileName !== 'string' || !fileName.trim() || typeof contentType !== 'string' || !Number.isInteger(Number(size))) {
+    // Number.isInteger(-5) === true : sans la garde `<= 0`, un presign pour
+    // une taille négative ou nulle passait la validation.
+    if (typeof fileName !== 'string' || !fileName.trim() || typeof contentType !== 'string'
+      || !Number.isInteger(Number(size)) || Number(size) <= 0) {
       res.status(400).json({ error: 'Invalid media data' });
       return;
     }
