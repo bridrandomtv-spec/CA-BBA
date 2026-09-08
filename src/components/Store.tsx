@@ -10,6 +10,15 @@ export default function Store() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  // Notifications inline — remplace les alert() bloquants (dialogues natifs
+  // non stylables, hors RTL, coupent le thread principal d'une PWA).
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     fetch('/api/store/products')
@@ -51,7 +60,7 @@ export default function Store() {
 
   const handleCheckout = async () => {
     if (!currentUser) {
-      alert('يجب تسجيل الدخول لإتمام الطلب');
+      setNotice({ kind: 'error', text: 'يجب تسجيل الدخول لإتمام الطلب' });
       return;
     }
     if (cart.length === 0) return;
@@ -59,23 +68,24 @@ export default function Store() {
     try {
       const res = await fetch('/api/store/orders', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           items: cart.map((item) => ({ productId: item.product.id, quantity: item.quantity })),
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'حدث خطأ أثناء إتمام الطلب');
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'حدث خطأ أثناء إتمام الطلب');
       setCart([]);
       setIsCartOpen(false);
       setProducts((prev) => prev.map((p) => {
         const bought = cart.find((item) => item.product.id === p.id);
         return bought ? { ...p, stock: Math.max(0, (p.stock ?? 0) - bought.quantity) } : p;
       }));
-      alert('تم تقديم طلبك بنجاح!');
+      setNotice({ kind: 'success', text: 'تم تقديم طلبك بنجاح!' });
     } catch (error: any) {
       console.error('Checkout error:', error);
-      alert(error?.message || 'حدث خطأ أثناء إتمام الطلب');
+      setNotice({ kind: 'error', text: (typeof error?.message === 'string' && error.message) || 'حدث خطأ أثناء إتمام الطلب' });
     } finally {
       setIsCheckingOut(false);
     }
@@ -105,9 +115,23 @@ export default function Store() {
         </button>
       </div>
 
+      {notice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`p-3 rounded-xl border text-sm font-bold animate-in fade-in duration-200 ${
+            notice.kind === 'success'
+              ? 'bg-green-500/10 border-green-500/30 text-green-400'
+              : 'bg-red-500/10 border-red-500/30 text-red-400'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       {activeTab === 'merch' ? (
         <div className="space-y-4 pb-20 relative z-10">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {products.map((product) => (
               <div key={product.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col group hover:border-yellow-500/50 transition-all">
                 <div className="aspect-square bg-zinc-800 rounded-lg mb-3 flex items-center justify-center relative overflow-hidden">
