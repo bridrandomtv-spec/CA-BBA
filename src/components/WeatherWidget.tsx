@@ -1,3 +1,7 @@
+// Widget météo — appelle /api/weather (proxy serveur, même origine) au lieu
+// d'api.open-meteo.com : avec la CSP durcie (connect-src 'self'), l'appel
+// direct aurait été BLOQUÉ en production et le widget serait tombé en erreur
+// dès le déploiement. Le format de réponse est celui d'open-meteo, inchangé.
 import { useState, useEffect } from 'react';
 import { Droplets, Wind, Sun, Cloud, CloudRain, CloudLightning, MapPin, Loader2 } from 'lucide-react';
 
@@ -18,22 +22,17 @@ export default function WeatherWidget() {
   useEffect(() => {
     const fetchWeather = async () => {
       try {
-        // إحداثيات ملعب 20 أوت في برج بوعريريج
-        const lat = 36.0732;
-        const lon = 4.7611;
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&wind_speed_unit=kmh`;
-        
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Network error');
-        
+        const res = await fetch('/api/weather', { credentials: 'same-origin' });
+        if (!res.ok) throw new Error(`Network error: ${res.status}`);
+
         const data = await res.json();
         const current = data.current;
-        
+
         let condition = "مشمس وصافي";
         let IconComponent = Sun;
         let colorClass = "text-yellow-500";
         let code = current.weather_code;
-        
+
         if (code === 0) {
           condition = "مشمس وصافي";
           IconComponent = Sun;
@@ -68,6 +67,7 @@ export default function WeatherWidget() {
           icon: IconComponent,
           color: colorClass
         });
+        setError(false);
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -77,8 +77,9 @@ export default function WeatherWidget() {
     };
 
     fetchWeather();
-    
-    // التحديث كل 15 دقيقة
+
+    // Le proxy met en cache 10 min côté serveur : un rafraîchissement client
+    // toutes les 15 min ne génère au pire qu'un appel fournisseur par tranche.
     const interval = setInterval(fetchWeather, 15 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
@@ -86,7 +87,7 @@ export default function WeatherWidget() {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-sm relative overflow-hidden min-h-[140px]">
       <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl translate-x-10 -translate-y-10"></div>
-      
+
       <div className="flex justify-between items-center mb-4 relative z-10">
         <div className="flex items-center gap-2">
           <h3 className="font-bold text-white text-lg">طقس الملعب</h3>
@@ -124,7 +125,7 @@ export default function WeatherWidget() {
                 <p className={`text-sm font-bold ${weather.color}`}>{weather.condition}</p>
               </div>
             </div>
-            
+
             <div className="flex flex-col gap-2 border-r border-zinc-800 pr-4">
               <div className="flex items-center gap-2 text-xs">
                 <Wind size={14} className="text-zinc-500" />
@@ -136,11 +137,11 @@ export default function WeatherWidget() {
               </div>
             </div>
           </div>
-          
+
           <div className="mt-4 pt-3 border-t border-zinc-800/50 flex items-center gap-2 text-[10px] text-zinc-400 relative z-10">
             <span className={`w-2 h-2 rounded-full ${weather.temp > 35 ? 'bg-red-500' : 'bg-green-500'}`}></span>
             <span>
-              {weather.temp > 35 
+              {weather.temp > 35
                 ? 'الطقس حار جداً، يُنصح بإحضار قبعات واقية للملعب.'
                 : 'الظروف مثالية لإجراء المباراة القادمة في ملعب 20 أوت'}
             </span>
