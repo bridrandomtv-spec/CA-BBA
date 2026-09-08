@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
+import { isValidationError, requireString, requireDateString, requireHttpUrl } from './validate.js';
 import { footballEvents } from '../football/events.js';
 
 export const matchesRouter = Router();
@@ -131,14 +132,30 @@ matchesRouter.get('/highlights/all', async (req, res) => {
 
 matchesRouter.post('/highlights', requireAdmin, async (req, res) => {
   try {
-    const { title, match, date, duration, thumbnail, videoUrl } = req.body;
+    const { title, match, date, duration, thumbnail, videoUrl } = req.body ?? {};
+
+    // Validation typée + bornée au schéma (title/match_title VARCHAR(255),
+    // duration VARCHAR(20), thumbnail VARCHAR(1024), highlight_date DATE) :
+    // sans elle, une chaîne trop longue remontait en erreur pg 22001 → 500,
+    // et n'importe quelle URL (y compris javascript:) partait en base puis
+    // dans l'iframe/le <video> de MatchHighlights.
+    const cleanTitle = requireString(title, 'title', 255);
+    const cleanMatch = requireString(match, 'match', 255);
+    const cleanDate = requireDateString(date, 'date');
+    const cleanDuration = requireString(duration, 'duration', 20);
+    const cleanThumbnail = requireHttpUrl(requireString(thumbnail, 'thumbnail', 1024), 'thumbnail');
+    const cleanVideoUrl = videoUrl
+      ? requireHttpUrl(requireString(videoUrl, 'videoUrl', 1024), 'videoUrl')
+      : null;
+
     const result = await query(
       `INSERT INTO match_highlights (title, match_title, highlight_date, duration, thumbnail, video_url)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, match, date, duration, thumbnail, videoUrl]
+      [cleanTitle, cleanMatch, cleanDate, cleanDuration, cleanThumbnail, cleanVideoUrl]
     );
     res.status(201).json({ id: result.rows[0].id });
   } catch (error) {
+    if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
     console.error('Error adding highlight:', error);
     res.status(500).json({ error: 'Failed to add highlight' });
   }
