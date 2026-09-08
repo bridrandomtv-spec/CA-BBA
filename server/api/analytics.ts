@@ -11,13 +11,23 @@ const optionalAuth = async (req: Request, _res: Response, next: NextFunction): P
   const token = req.cookies?.session;
   if (!token) { next(); return; }
   try {
-    const decoded = jwt.verify(token, env.sessionSecret) as { sub?: unknown };
+    const decoded = jwt.verify(token, env.sessionSecret) as { sub?: unknown; tv?: unknown };
     if (typeof decoded.sub !== 'string') { next(); return; }
-    const result = await query('SELECT id,email,display_name,avatar_url,role,created_at FROM users WHERE id = $1', [decoded.sub]);
-    if (result.rows.length) {
-      const row = result.rows[0];
+    // deleted_at IS NULL : un compte anonymisé (RGPD) ne reçoit plus
+    // d'attribution. token_version : mêmes règles de révocation que
+    // requireAuth — un cookie révoqué/volé n'attribue plus les événements.
+    const result = await query(
+      'SELECT id,email,display_name,avatar_url,role,created_at,token_version FROM users WHERE id = $1 AND deleted_at IS NULL',
+      [decoded.sub],
+    );
+    const row = result.rows[0];
+    // Jetons pré-migration 011 (sans claim `tv`) acceptés contre la version 1.
+    const expectedVersion = typeof decoded.tv === 'number' ? decoded.tv : 1;
+    if (row && row.token_version === expectedVersion) {
       req.user = { id: row.id, email: row.email, displayName: row.display_name, avatarUrl: row.avatar_url, role: row.role, createdAt: row.created_at } as AuthUser;
     }
+    // Session révoquée ou compte supprimé : l'événement reste valable en
+    // tant qu'anonyme (le cookie analytics est indépendant de la session).
   } catch { /* anonymous analytics remains valid */ }
   next();
 };
