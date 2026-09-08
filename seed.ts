@@ -9,7 +9,10 @@ const DEFAULT_POSTS = [
   {
     authorName: 'رياض 34',
     content: 'صور من دخلة اليوم.. الإبداع مستمر!',
-    imageUrl: 'https://images.unsplash.com/photo-1508344928928-7137b29de216?auto=format&fit=crop&q=80&w=800&h=400',
+    // Plus de hotlink Unsplash (fragilité + fuite d'IP des visiteurs vers un
+    // tiers à chaque rendu du fil). En dev, uploader une image locale via
+    // عدسة الجماهير (R2) exerce le vrai chemin de publication.
+    imageUrl: null,
   },
   {
     authorName: 'وليد BBA',
