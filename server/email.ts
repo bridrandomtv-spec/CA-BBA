@@ -1,7 +1,7 @@
 import { query } from './db/index.js';
 import { env } from './env.js';
 
-export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'system';
+export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'order' | 'system';
 
 export interface SendEmailInput {
   userId?: string;
@@ -36,6 +36,72 @@ export function welcomeEmail(displayName: string) {
   };
 }
 
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  confirmed: 'تم تأكيد طلبك ✅',
+  processing: 'جاري تحضير طلبك 📦',
+  shipped: 'طلبك في الطريق إليك 🚚',
+  delivered: 'تم تسليم طلبك 🎉',
+  cancelled: 'تم إلغاء طلبك',
+};
+
+export interface OrderEmailItem {
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+const ORDER_HTML_SHELL = (inner: string) =>
+  `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px">` +
+  `<div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px">${inner}</div>` +
+  `</body></html>`;
+
+/** Référence courte lisible : les 8 premiers caractères de l'UUID. */
+function shortRef(orderId: string): string {
+  return orderId.slice(0, 8).toUpperCase();
+}
+
+export function orderConfirmationEmail(items: OrderEmailItem[], total: number, orderId: string) {
+  const rows = items
+    .map(
+      (item) =>
+        `<tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;font-size:14px">` +
+        `${escapeHtml(item.name)} <span style="color:#71717a">×${item.quantity}</span></td>` +
+        `<td style="padding:8px 0;border-bottom:1px solid #f4f4f5;font-size:14px;text-align:left">` +
+        `${item.price * item.quantity} د.ج</td></tr>`,
+    )
+    .join('');
+
+  return {
+    subject: `طلبك في متجر CABBA — ${shortRef(orderId)}`,
+    html: ORDER_HTML_SHELL(
+      `<h1>شكراً لطلبك 🟡⚫</h1>` +
+      `<p>تم تسجيل طلبك لدى متجر أنصار شباب أهلي برج بوعريريج وهو قيد المعالجة.</p>` +
+      `<table style="width:100%;border-collapse:collapse;margin:16px 0">${rows}</table>` +
+      `<p style="font-weight:bold;font-size:16px">المجموع: ${total} د.ج</p>` +
+      `<p style="color:#71717a;font-size:12px">رقم الطلب: <span dir="ltr">${escapeHtml(shortRef(orderId))}</span></p>` +
+      `<p style="color:#71717a;font-size:12px">ستصلك رسالة عند كل تغيير في حالة الطلب.</p>`,
+    ),
+  };
+}
+
+export function orderStatusEmail(status: string, orderId: string) {
+  const label = ORDER_STATUS_LABELS[status] ?? `تحديث حالة طلبك: ${status}`;
+  const isCancellation = status === 'cancelled';
+
+  return {
+    subject: `متجر CABBA — ${label} (${shortRef(orderId)})`,
+    html: ORDER_HTML_SHELL(
+      `<h1>${escapeHtml(label)}</h1>` +
+      `<p>طلبك رقم <span dir="ltr"><strong>${escapeHtml(shortRef(orderId))}</strong></span> ` +
+      (isCancellation
+        ? `تم إلغاؤه. إذا كنت قد دفعت مسبقاً، تواصل مع إدارة النادي للترتيبات.`
+        : `أصبح بحالة «${escapeHtml(label)}». يمكنك متابعة طلباتك من التطبيق في أي وقت.`) +
+      `</p>` +
+      `<p><a href="${escapeHtml(env.appBaseUrl)}/#/store" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">فتح متجر CABBA</a></p>`,
+    ),
+  };
+}
+
 export async function sendEmail(input: SendEmailInput) {
   if (!configured) return { sent: false, skipped: 'not_configured' as const };
 
@@ -66,24 +132,43 @@ export async function sendEmail(input: SendEmailInput) {
   return { sent: true };
 }
 
-async function deliver(input: SendEmailInput) {
-  const response = await fetch(RESEND_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.emailFrom,
-      to: [input.to],
-      subject: input.subject,
-      html: input.html,
-    }),
-  });
+/** Budget de livraison : un fournisseur muet ne suspend pas le scheduler
+ *  (rappels de match, résultats) — l'échec passe la ligne en status='failed'
+ *  et le retry existant (ON CONFLICT WHERE status='failed') prend le relais. */
+const RESEND_TIMEOUT_MS = 10_000;
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Email provider returned ${response.status}: ${detail.slice(0, 500)}`);
+async function deliver(input: SendEmailInput) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RESEND_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(RESEND_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.emailFrom,
+        to: [input.to],
+        subject: input.subject,
+        html: input.html,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`Email provider returned ${response.status}: ${detail.slice(0, 500)}`);
+    }
+  } catch (error) {
+    // AbortError → message explicite dans email_log.error_message.
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Email provider timed out after ${RESEND_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
