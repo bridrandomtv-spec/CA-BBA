@@ -108,7 +108,11 @@ test('Match Center is PostgreSQL-backed and SSE carries change reasons', () => {
   assert.match(sync, /reason: 'lineups'/);
   assert.match(sync, /reason: 'statistics'/);
   assert.match(events, /FootballMatchChangeReason/);
-  assert.match(center, /EventSource\(\`\/api\/matches\/\$\{match\.id\}\/stream\`\)/);
+  // L'URL du flux peut porter le nom de variable et l'échappement qu'elle
+  // veut (encodeURIComponent(matchId) depuis le correctif SSE) : ce qui est
+  // verrouillé, c'est l'usage d'EventSource sur /api/matches/:id/stream —
+  // jamais de polling navigateur pour le direct.
+  assert.match(center, /EventSource\(\`\/api\/matches\/.*\/stream\`\)/);
   assert.doesNotMatch(center, /setInterval\(/);
 });
 
