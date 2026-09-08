@@ -5,7 +5,7 @@ import cookieParser from "cookie-parser";
 // env doit être importé avant tout module qui lit process.env : c'est lui qui
 // appelle dotenv.config() et qui arrête le processus si la config est invalide.
 import { env } from "./server/env.js";
-import { authRouter } from "./server/auth.js";
+import { authRouter, requireAuth } from "./server/auth.js";
 
 import { newsRouter } from "./server/api/news.js";
 import { videosRouter } from "./server/api/videos.js";
@@ -22,18 +22,20 @@ import { emailRouter } from "./server/api/email.js";
 import { analyticsRouter } from "./server/api/analytics.js";
 import { startFootballScheduler, stopFootballScheduler } from "./server/football/scheduler.js";
 import { pool, query } from "./server/db/index.js";
-import { createRateLimiter, requestId, securityHeaders } from "./server/security.js";
+import { requestId, securityHeaders } from "./server/security.js";
+// Limiteur à backend Redis optionnel (repli mémoire automatique) : même
+// signature que createRateLimiter de security.ts.
+import { createRateLimiter } from "./server/rateLimit.js";
 
 const app = express();
 app.set('trust proxy', env.trustProxy);
 app.disable('x-powered-by');
 
 app.param('id', (req, res, next, id) => {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  // Let pass non-UUID IDs if they're explicitly handled like 'all' for /highlights/all, though 'all' is not an param but in the path. Wait, /highlights/all might trigger this if the route is /highlights/:id, but it's defined before or after? Express checks route match first then calls param.
-  // Actually, if an ID isn't a valid UUID, returning 400 is exactly what we want.
+  // Versions 1 à 7 acceptées : gen_random_uuid() produit des v4, mais les
+  // UUID v7 (horodatés) se généralisent — la regex d'origine les rejetait.
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-7][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(id)) {
-    // If it's a known non-UUID, allow it? We only use UUIDs in our DB.
     res.status(400).json({ error: 'Invalid UUID format' });
     return;
   }
@@ -56,7 +58,7 @@ const authRateLimit = createRateLimiter({
   keyPrefix: 'auth',
 });
 // Cloud Run (et la plupart des hébergeurs) imposent le port via la variable
-// d'environnement PORT. Le 3000 codé en dur empêchait tout démarrage en ligne.
+// d'environnement PORT.
 const PORT = env.port;
 const HOST = env.host;
 
@@ -84,16 +86,22 @@ app.use("/api/media", mediaRouter);
 app.use("/api/email", emailRouter);
 app.use("/api/analytics", analyticsRouter);
 
-
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY ?? "" });
 
 const SYSTEM_INSTRUCTION = `أنت مساعد ذكي مخصص لأنصار نادي شباب أهلي برج بوعريريج (CABBA).
 تتحدث باللغة العربية بطلاقة، ويمكنك التحدث باللهجة الجزائرية إذا لزم الأمر.
 مهمتك هي مساعدة الأنصار في كتابة منشورات لدعم الفريق، اقتراح شعارات (Slogans)، وتوليد أفكار لمساندة النادي في أزمته المالية والرياضية.
-ألوان الفريق هي الأصفر والأسود (الجراد الأصفر). كن دائمًا إيجابيًا وحماسيًا!`;
+ألوان الفريق هي الأصفر والأسود (الجراد الأصفر). كن دائمًا إيجابيًا ومتحمسًا!`;
 
 /** Nombre maximal de tours conservés, pour borner la taille du contexte envoyé. */
 const MAX_HISTORY_TURNS = 20;
+
+/**
+ * Longueur maximale d'un message (et de chaque tour d'historique).
+ * Sans cette borne, un client pouvait envoyer des dizaines de milliers de
+ * caractères par requête et consumer le quota Gemini à moindre coût.
+ */
+const MAX_MESSAGE_LENGTH = 2_000;
 
 interface ClientMessage {
   role?: unknown;
@@ -102,10 +110,8 @@ interface ClientMessage {
 
 /**
  * Convertit l'historique du client vers le format attendu par le SDK Gemini.
- *
- * L'ancienne version parcourait `history` dans une boucle vide : l'assistant
- * repartait donc de zéro à chaque message et ne pouvait pas suivre une
- * conversation ("et lui ?", "reformule", etc.).
+ * Chaque texte est tronqué à MAX_MESSAGE_LENGTH : l'historique vient du
+ * navigateur, il est donc aussi peu fiable que le message courant.
  */
 function toGeminiHistory(history: unknown) {
   if (!Array.isArray(history)) return [];
@@ -116,19 +122,25 @@ function toGeminiHistory(history: unknown) {
     .map((entry) => ({
       // Le SDK attend "model" là où le client utilise "ai".
       role: entry.role === "user" ? ("user" as const) : ("model" as const),
-      parts: [{ text: entry.text as string }],
+      parts: [{ text: (entry.text as string).slice(0, MAX_MESSAGE_LENGTH) }],
     }))
     .slice(-MAX_HISTORY_TURNS);
 }
 
+// Quota Gemini par COMPTE, pas par IP : derrière un NAT (campus, réseau
+// mobile), des dizaines de supporters partageraient le même compartiment.
 const chatRateLimit = createRateLimiter({
   windowMs: 60_000,
   limit: 10,
   message: 'Trop de requêtes. Réessayez dans une minute.',
   keyPrefix: 'chat',
+  keyFn: (req) => req.user?.id ?? req.ip ?? 'unknown',
 });
 
-app.post("/api/chat", chatRateLimit, async (req, res) => {
+// requireAuth AVANT le limiteur : les anonymes reçoivent 401 sans consommer
+// de compartiment, et la keyFn voit req.user. L'assistant n'est plus une
+// pompe à quota Gemini ouverte à toute IP jetable.
+app.post("/api/chat", requireAuth, chatRateLimit, async (req, res) => {
   try {
     const { message, history } = req.body ?? {};
 
@@ -136,6 +148,11 @@ app.post("/api/chat", chatRateLimit, async (req, res) => {
     // attendent `void | Promise<void>` et refusent un handler qui renvoie `res`.
     if (typeof message !== "string" || !message.trim()) {
       res.status(400).json({ error: "Message is required" });
+      return;
+    }
+
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      res.status(400).json({ error: "الرسالة طويلة جداً." });
       return;
     }
 
@@ -162,14 +179,12 @@ app.post("/api/chat", chatRateLimit, async (req, res) => {
   }
 });
 
-// Liveness : ne dépend pas de PostgreSQL. L'hébergeur peut redémarrer le
-// processus uniquement si le serveur lui-même ne répond plus.
+// Liveness : ne dépend pas de PostgreSQL.
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', geminiConfigured: Boolean(GEMINI_API_KEY) });
 });
 
-// Readiness : vérifie la dépendance critique PostgreSQL avant d'envoyer du
-// trafic à une instance qui ne pourra pas traiter les requêtes métier.
+// Readiness : vérifie la dépendance critique PostgreSQL.
 app.get('/api/ready', async (_req, res) => {
   try {
     await query('SELECT 1');
@@ -180,17 +195,17 @@ app.get('/api/ready', async (_req, res) => {
   }
 });
 
-// Les routes API inconnues renvoient du JSON, tandis que les routes front sont
-// prises en charge par le fallback SPA plus bas.
+// Les routes API inconnues renvoient du JSON ; les routes front sont prises
+// en charge par le fallback SPA plus bas.
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'API route not found' });
 });
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
-    // Import dynamique : avec un import statique, esbuild produit un `require("vite")`
-    // en tête de dist/server.cjs, ce qui obligeait à installer Vite (un outil de
-    // build) sur le serveur de production, y compris avec `npm ci --omit=dev`.
+    // Import dynamique : avec un import statique, esbuild produit un
+    // `require("vite")` en tête de dist/server.cjs, ce qui obligerait à
+    // installer Vite sur le serveur de production.
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -199,7 +214,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    
+
     app.use((req, res, next) => {
       if (req.path.endsWith('.cjs') || req.path.endsWith('.cjs.map')) {
         res.status(404).end();
