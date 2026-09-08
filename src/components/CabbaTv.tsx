@@ -8,13 +8,16 @@ export default function CabbaTv() {
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/videos')
-      .then(res => res.json())
+    // res.ok vérifié : sur une 500, l'ancien `.then(res => res.json())`
+    // envoyait le corps d'erreur dans data.videos.filter → TypeError masqué.
+    fetch('/api/videos', { credentials: 'same-origin' })
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(`videos → ${res.status}`)))
       .then(data => {
         // The API already returns published videos only; kept as a second gate.
-        setVideos(data.videos.filter((v: Video) => v.published));
+        const videos = Array.isArray(data?.videos) ? (data.videos as Video[]) : [];
+        setVideos(videos.filter((v) => v.published));
       })
-      .catch(e => console.error(e));
+      .catch(e => console.error('[CABBA] videos:', e));
   }, []);
 
   const handlePlay = async (v: Video) => {
