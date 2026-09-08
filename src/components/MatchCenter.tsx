@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef} from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -141,17 +141,66 @@ export default function MatchCenter() {
     void fetchCenter(selectedId);
   }, [selectedId]);
 
+  // ---- Correctifs SSE (audit) ----
+  // 1. ORAGE DE RECONNEXIONS : les deps incluaient `selectedId` ET la clé de
+  //    TOUS les matchs : chaque sélection d'un match — et chaque tick de
+  //    score — fermait et rouvrait TOUS les flux EventSource. La clé ne porte
+  //    plus que sur l'ensemble trié des ids des matchs live, et selectedId
+  //    passe par une ref.
+  // 2. ÉCHECS NON BORNÉS : EventSource se reconnecte seul, mais en boucle
+  //    infinie si le serveur échoue durablement. Plafond : 5 échecs
+  //    consécutifs → fermeture, puis UNE tentative retardée de 30 s.
+  // 3. ARRIÈRE-PLAN : PWA mobile = batterie/data. Flux fermés onglet masqué,
+  //    rouverts au retour — le serveur renvoie un event 'initial' à chaque
+  //    ouverture, les scores se resynchronisent sans polling.
+  const selectedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  const liveStreamKey = useMemo(
+    () =>
+      matches
+        .filter((m) => m.status === 'live' && m.apiFixtureId)
+        .map((m) => m.id)
+        .sort()
+        .join('|'),
+    [matches],
+  );
+
   // A single SSE connection per live fixture. EventSource reconnects by itself;
   // there is deliberately no browser polling.
   useEffect(() => {
-    const liveMatches = matches.filter((m) => m.status === 'live' && m.apiFixtureId);
-    const streams = liveMatches.map((match) => {
-      const source = new EventSource(`/api/matches/${match.id}/stream`);
+    const liveIds = liveStreamKey ? liveStreamKey.split('|') : [];
+    if (liveIds.length === 0) return;
+
+    let disposed = false;
+    const sources = new Map<string, EventSource>();
+    const failures = new Map<string, number>();
+    const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+    const MAX_CONSECUTIVE_FAILURES = 5;
+    const RETRY_DELAY_MS = 30_000;
+
+    const closeStream = (matchId: string) => {
+      sources.get(matchId)?.close();
+      sources.delete(matchId);
+    };
+
+    const openStream = (matchId: string) => {
+      if (disposed || sources.has(matchId)) return;
+
+      const source = new EventSource(`/api/matches/${encodeURIComponent(matchId)}/stream`);
+      sources.set(matchId, source);
+
+      source.addEventListener('open', () => failures.set(matchId, 0));
+
       source.addEventListener('match', (raw) => {
+        failures.set(matchId, 0);
         try {
           const payload = JSON.parse((raw as MessageEvent).data) as { match: any; reason: string };
           const data = payload.match;
-          setMatches((current) => current.map((item) => item.id === match.id ? {
+          setMatches((current) => current.map((item) => item.id === matchId ? {
             ...item,
             homeScore: Number(data.home_score ?? item.homeScore),
             awayScore: Number(data.away_score ?? item.awayScore),
@@ -160,17 +209,51 @@ export default function MatchCenter() {
             extraMinute: data.extra_minute ?? null,
             apiStatus: data.api_status ?? null,
           } : item));
-          if (selectedId === match.id && payload.reason !== 'initial') {
-            void fetchCenter(match.id, false);
+          // selectedId via ref : sélectionner un match ne recrée plus les flux.
+          if (selectedIdRef.current === matchId && payload.reason !== 'initial') {
+            void fetchCenter(matchId, false);
           }
         } catch (error) {
           console.error('[CABBA] invalid SSE payload:', error);
         }
       });
-      return source;
-    });
-    return () => streams.forEach((source) => source.close());
-  }, [matches.map((m) => `${m.id}:${m.status}:${m.apiFixtureId}`).join('|'), selectedId]);
+
+      source.addEventListener('error', () => {
+        const count = (failures.get(matchId) ?? 0) + 1;
+        failures.set(matchId, count);
+        if (count < MAX_CONSECUTIVE_FAILURES) return; // EventSource se reconnecte seul.
+
+        closeStream(matchId);
+        failures.set(matchId, 0);
+        const timer = setTimeout(() => {
+          retryTimers.delete(matchId);
+          if (!disposed && !document.hidden) openStream(matchId);
+        }, RETRY_DELAY_MS);
+        retryTimers.set(matchId, timer);
+      });
+    };
+
+    const openAll = () => {
+      if (!document.hidden) liveIds.forEach(openStream);
+    };
+    const closeAll = () => liveIds.forEach(closeStream);
+
+    const handleVisibility = () => {
+      if (document.hidden) closeAll();
+      else openAll();
+    };
+
+    openAll();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      disposed = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      retryTimers.forEach((timer) => clearTimeout(timer));
+      retryTimers.clear();
+      closeAll();
+    };
+  }, [liveStreamKey]);
 
   const openMatch = (match: Match) => {
     setSelectedId(match.id);
