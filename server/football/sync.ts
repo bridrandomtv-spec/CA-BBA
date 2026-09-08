@@ -7,6 +7,12 @@ import { broadcastPush } from '../notifications.js';
 
 type ApiResponse<T> = { response: T[] };
 
+/** Fuseau demandé au fournisseur : les heures stockées sont l'heure locale
+ *  algérienne (offset fixe UTC+1, pas de DST). L'ancien `toISOString()`
+ *  stockait de l'UTC : un match à 18h00 à Bordj était AFFICHÉ 17h00 et les
+ *  rappels push partaient une heure à côté. */
+const PROVIDER_TIMEZONE = 'Africa/Algiers';
+
 function apiStatusToApp(status?: string): string {
   if (!status) return 'scheduled';
   if (['1H', 'HT', '2H', 'ET', 'P', 'LIVE'].includes(status)) return 'live';
@@ -17,8 +23,14 @@ function apiStatusToApp(status?: string): string {
 }
 
 async function upsertFixture(fixture: any): Promise<string> {
-  const date = fixture.fixture?.date ? new Date(fixture.fixture.date) : null;
-  if (!date || Number.isNaN(date.getTime())) throw new Error(`Fixture ${fixture.fixture?.id} has no valid date`);
+  const rawDate = fixture.fixture?.date;
+  const parsed = rawDate ? new Date(rawDate) : null;
+  if (!parsed || Number.isNaN(parsed.getTime())) throw new Error(`Fixture ${fixture.fixture?.id} has no valid date`);
+  // Parties LITTÉRALES de la date renvoyée (ex. "2026-09-07T18:00:00+01:00") :
+  // le fournisseur a déjà converti vers PROVIDER_TIMEZONE.
+  const literal = String(rawDate);
+  const matchDate = literal.slice(0, 10);
+  const matchTime = literal.slice(11, 19) || '00:00:00';
   return withTransaction(async (execute) => {
     const result = await execute(
       `INSERT INTO matches (
@@ -41,7 +53,7 @@ async function upsertFixture(fixture: any): Promise<string> {
         api_last_synced_at=NOW()
       RETURNING id`,
       [fixture.teams?.home?.name ?? 'Équipe locale', fixture.teams?.away?.name ?? 'Équipe visiteuse',
-        fixture.league?.name ?? 'Football', date.toISOString().slice(0, 10), date.toISOString().slice(11, 19),
+        fixture.league?.name ?? 'Football', matchDate, matchTime,
         fixture.fixture?.venue?.name ?? '—', apiStatusToApp(fixture.fixture?.status?.short),
         fixture.goals?.home ?? 0, fixture.goals?.away ?? 0, fixture.fixture?.id,
         fixture.league?.id ?? null, fixture.league?.season ?? null, fixture.league?.round ?? null,
@@ -56,7 +68,7 @@ async function upsertFixture(fixture: any): Promise<string> {
 export async function syncFixture(fixtureId: number) {
   let data: ApiResponse<any>;
   try {
-    data = await footballApi<ApiResponse<any>>('/fixtures', { id: fixtureId });
+    data = await footballApi<ApiResponse<any>>('/fixtures', { id: fixtureId, timezone: PROVIDER_TIMEZONE });
   } catch (error) {
     await markCompetitionAccessBlocked(error);
     throw error;
@@ -68,8 +80,9 @@ export async function syncFixture(fixtureId: number) {
   );
   const previous = before.rows[0];
   const matchId = await upsertFixture(fixture);
-  await query('INSERT INTO football_sync_log(operation, fixture_id, success, quota_used) VALUES ($1,$2,true,$3)',
-    ['fixture', fixtureId, null]);
+  // Journalisation retirée : le scheduler enveloppe cet appel dans
+  // safeOperation('fixture', …) qui écrit déjà football_sync_log (succès
+  // comme échec) — l'insert interne produisait une seconde ligne par tick.
   footballEvents.emit('match:changed', { matchId, fixtureId, reason: 'fixture', updatedAt: new Date().toISOString() });
 
   const nextStatus = apiStatusToApp(fixture.fixture?.status?.short);
@@ -79,7 +92,7 @@ export async function syncFixture(fixtureId: number) {
     void broadcastPush('finalScores', `fixture-finished-${fixtureId}-${homeScore}-${awayScore}`, {
       title: 'نهاية المباراة! 🏁',
       body: `${fixture.teams?.home?.name ?? 'الفريق المضيف'} ${homeScore} - ${awayScore} ${fixture.teams?.away?.name ?? 'الفريق الضيف'}`,
-      url: '/?tab=match', tag: `cabba-final-${fixtureId}`, data: { url: '/?tab=match', fixtureId },
+      url: '/#/match', tag: `cabba-final-${fixtureId}`, data: { url: '/#/match', fixtureId },
     }).catch((error) => console.error('[CABBA] final score push:', error));
   }
   return { matchId, status: fixture.fixture?.status?.short, elapsed: fixture.fixture?.status?.elapsed ?? null };
@@ -97,11 +110,15 @@ export async function syncFixtureEvents(fixtureId: number, matchId: string) {
   }
   const previousEvents = await query<{ api_event_id:number | null }>('SELECT api_event_id FROM match_events WHERE match_id=$1', [matchId]);
   const previousIds = new Set(previousEvents.rows.map((row) => row.api_event_id).filter((id): id is number => id !== null));
-  await query('DELETE FROM match_events WHERE match_id=$1', [matchId]);
   const newGoalEvents: any[] = [];
+  // DELETE + réinsertion ATOMIQUES : sans transaction, un échec à mi-boucle
+  // effaçait tous les événements sans les remplacer, et un lecteur SSE voyait
+  // une liste vide entre les deux écritures.
+  await withTransaction(async (execute) => {
+  await execute('DELETE FROM match_events WHERE match_id=$1', [matchId]);
   for (const event of data.response ?? []) {
     if (event.type === 'Goal' && event.detail !== 'Missed Penalty' && event.id && !previousIds.has(Number(event.id))) newGoalEvents.push(event);
-    await query(
+    await execute(
       `INSERT INTO match_events (match_id, api_event_id, minute, extra_minute, type, detail, comments, team_api_id, player_api_id, player_name, assist_player_api_id, assist_player_name, raw_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (match_id, api_event_id) DO UPDATE SET minute=EXCLUDED.minute, extra_minute=EXCLUDED.extra_minute, type=EXCLUDED.type, detail=EXCLUDED.detail, comments=EXCLUDED.comments, raw_json=EXCLUDED.raw_json`,
       [matchId, event.id ?? null, event.time?.elapsed ?? 0, event.time?.extra ?? null, event.type ?? null,
@@ -109,12 +126,15 @@ export async function syncFixtureEvents(fixtureId: number, matchId: string) {
         event.player?.name ?? null, event.assist?.id ?? null, event.assist?.name ?? null, JSON.stringify(event)],
     );
   }
+  });
+  // Pushs APRÈS commit : si la transaction roule, aucune notification ne part
+  // pour des événements qui n'existent pas en base.
   for (const event of newGoalEvents) {
     const scorer = event.player?.name ? ` — ${event.player.name}` : '';
     void broadcastPush('goals', `goal-${fixtureId}-${event.id}`, {
       title: 'هدف في مباراة الكابا! ⚽',
       body: `${event.team?.name ?? 'الفريق'} يسجل في الدقيقة ${event.time?.elapsed ?? '?'}${event.time?.extra ? `+${event.time.extra}` : ''}${scorer}`,
-      url: '/?tab=match', tag: `cabba-goal-${fixtureId}-${event.id}`, data: { url: '/?tab=match', fixtureId, eventId: event.id },
+      url: '/#/match', tag: `cabba-goal-${fixtureId}-${event.id}`, data: { url: '/#/match', fixtureId, eventId: event.id },
     }).catch((error) => console.error('[CABBA] goal push:', error));
   }
   footballEvents.emit('match:changed', { matchId, fixtureId, reason: 'events', updatedAt: new Date().toISOString() });
@@ -130,18 +150,24 @@ export async function syncFixtureLineups(fixtureId: number, matchId: string) {
     await markCompetitionAccessBlocked(error);
     throw error;
   }
-  await query('DELETE FROM match_lineups WHERE match_id=$1', [matchId]);
-  for (const lineup of data.response ?? []) {
-    for (const starter of lineup.startXI ?? []) await saveLineup(matchId, lineup.team?.id, starter, true);
-    for (const substitute of lineup.substitutes ?? []) await saveLineup(matchId, lineup.team?.id, substitute, false);
-  }
+  // Même atomicité que les événements : jamais de compositions à moitié
+  // effacées entre le DELETE et les INSERT.
+  await withTransaction(async (execute) => {
+    await execute('DELETE FROM match_lineups WHERE match_id=$1', [matchId]);
+    for (const lineup of data.response ?? []) {
+      for (const starter of lineup.startXI ?? []) await saveLineup(execute, matchId, lineup.team?.id, starter, true);
+      for (const substitute of lineup.substitutes ?? []) await saveLineup(execute, matchId, lineup.team?.id, substitute, false);
+    }
+  });
   footballEvents.emit('match:changed', { matchId, fixtureId, reason: 'lineups', updatedAt: new Date().toISOString() });
 }
 
-async function saveLineup(matchId: string, teamApiId: number | undefined, entry: any, starter: boolean) {
+type ExecuteFn = (text: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount: number | null }>;
+
+async function saveLineup(execute: ExecuteFn, matchId: string, teamApiId: number | undefined, entry: any, starter: boolean) {
   const p = entry.player ?? {};
   if (!teamApiId || !p.id) return;
-  await query(
+  await execute(
     `INSERT INTO match_lineups (match_id, team_api_id, player_api_id, player_name, number, position, grid, starter, raw_json)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (match_id, team_api_id, player_api_id) DO UPDATE SET player_name=EXCLUDED.player_name, number=EXCLUDED.number, position=EXCLUDED.position, grid=EXCLUDED.grid, starter=EXCLUDED.starter, raw_json=EXCLUDED.raw_json, updated_at=NOW()`,
     [matchId, teamApiId, p.id, p.name ?? null, p.number ?? null, p.pos ?? null, p.grid ?? null, starter, JSON.stringify(entry)],
@@ -182,6 +208,7 @@ export async function syncCompetitionFixtures() {
       league: env.apiFootballLeagueId,
       season: env.apiFootballSeason,
       team: env.apiFootballTeamId,
+      timezone: PROVIDER_TIMEZONE,
     });
   } catch (error) {
     await markCompetitionAccessBlocked(error);
@@ -216,9 +243,12 @@ export async function syncStandings() {
 
   const groups = data.response?.[0]?.league?.standings ?? [];
   const standings = groups.flat?.() ?? [];
-  await query('DELETE FROM league_standings WHERE league_api_id=$1 AND season=$2', [env.apiFootballLeagueId, env.apiFootballSeason]);
+  // DELETE + réinsertion ATOMIQUES : un échec partiel laissait le classement
+  // VIDÉ pour 6 h (écran الترتيب, team-summary, quick stats de l'accueil).
+  await withTransaction(async (execute) => {
+  await execute('DELETE FROM league_standings WHERE league_api_id=$1 AND season=$2', [env.apiFootballLeagueId, env.apiFootballSeason]);
   for (const row of standings) {
-    await query(
+    await execute(
       `INSERT INTO league_standings (league_api_id, season, rank, team_api_id, team_name, team_logo_url, points, goals_diff, played, win, draw, lose, goals_for, goals_against, form, raw_json)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [env.apiFootballLeagueId, env.apiFootballSeason, row.rank, row.team?.id, row.team?.name, row.team?.logo,
@@ -226,5 +256,6 @@ export async function syncStandings() {
         row.all?.goals?.for, row.all?.goals?.against, row.form, JSON.stringify(row)],
     );
   }
+  });
   return { synced: true, count: standings.length };
 }
