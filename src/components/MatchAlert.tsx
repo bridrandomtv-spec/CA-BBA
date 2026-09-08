@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
 import { X, Calendar, Newspaper, Trophy, Goal, Bell } from 'lucide-react';
 import {
-  NOTIFICATIONS_UPDATED_EVENT,
   TRIGGER_NOTIFICATION_EVENT,
   useNotificationSettings,
   type NotificationSettings,
@@ -81,7 +80,7 @@ export default function MatchAlert() {
 
   return (
     <div
-      className="fixed top-safe pt-4 left-4 right-4 z-[100] animate-in slide-in-from-top-10 fade-in duration-500"
+      className="fixed top-safe pt-4 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-full md:max-w-xl md:top-6 z-[100] animate-in slide-in-from-top-10 fade-in duration-500"
       role="status"
       aria-live="polite"
     >
