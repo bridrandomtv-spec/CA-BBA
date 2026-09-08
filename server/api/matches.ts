@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query } from '../db/index.js';
-import { requireAdmin } from '../auth.js';
+import { requireAdmin, requireAuth } from '../auth.js';
 import { footballEvents } from '../football/events.js';
 
 export const matchesRouter = Router();
