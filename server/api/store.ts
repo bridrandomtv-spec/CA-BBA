@@ -81,7 +81,7 @@ storeRouter.patch('/products/:id', requireAdmin, async (req, res) => {
     const result = await query(
       `UPDATE products SET name=$1, description=$2, price=$3, image_url=$4, category=$5,
        stock=$6, active=$7, updated_at=NOW() WHERE id=$8 RETURNING *`,
-      [name.trim(), typeof description === 'string' ? description.trim() : '', Number(price), imageUrl.trim(), category.trim(), Number(stock), Boolean(active), req.params.id],
+      [name.trim(), typeof description === 'string' ? description.trim() : '', Number(price), imageUrl.trim(), category.trim(), Number(stock), Boolean(active), orderId],
     );
     if (!result.rows.length) { res.status(404).json({ error: 'Product not found' }); return; }
     res.json({ product: mapProduct(result.rows[0]) });
@@ -93,7 +93,7 @@ storeRouter.patch('/products/:id', requireAdmin, async (req, res) => {
 
 storeRouter.delete('/products/:id', requireAdmin, async (req, res) => {
   try {
-    const result = await query('DELETE FROM products WHERE id=$1 RETURNING id', [req.params.id]);
+    const result = await query('DELETE FROM products WHERE id=$1 RETURNING id', [orderId]);
     if (!result.rows.length) { res.status(404).json({ error: 'Product not found' }); return; }
     res.json({ success: true });
   } catch (error) {
@@ -209,6 +209,11 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
   const { status } = req.body ?? {};
   if (!allowed.includes(status)) { res.status(400).json({ error: 'Invalid order status' }); return; }
 
+  // Les types Express 5 déclarent les valeurs de params en `string | string[]`
+  // (paramètres répétés) : coercion explicite — la route ne porte qu'un seul
+  // segment :id, validé UUID par app.param('id') dans server.ts.
+  const orderId = String(req.params.id);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -217,7 +222,7 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
     // simultanément ne peuvent pas restocker deux fois.
     const orderResult = await client.query(
       'SELECT id, status FROM orders WHERE id=$1 FOR UPDATE',
-      [req.params.id],
+      [orderId],
     );
     if (!orderResult.rows.length) {
       await client.query('COMMIT');
@@ -238,7 +243,7 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
          WHERE oi.order_id = $1
            AND oi.product_id IS NOT NULL
            AND oi.product_id = p.id`,
-        [req.params.id],
+        [orderId],
       );
       // product_id NULL = produit retiré du catalogue depuis l'achat :
       // la ligne de commande survit (historique), rien à restocker.
@@ -246,7 +251,7 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
 
     await client.query(
       'UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2',
-      [status, req.params.id],
+      [status, orderId],
     );
     await client.query('COMMIT');
     res.json({ success: true });
@@ -261,18 +266,18 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
           `SELECT o.user_id, u.email FROM orders o
            JOIN users u ON u.id = o.user_id
            WHERE o.id = $1 AND u.deleted_at IS NULL`,
-          [req.params.id],
+          [orderId],
         );
         const row = owner.rows[0];
         if (!row) return; // compte anonymisé depuis : rien à notifier.
-        const emailContent = orderStatusEmail(status, req.params.id);
+        const emailContent = orderStatusEmail(status, orderId);
         await sendEmail({
           userId: row.user_id,
           to: row.email,
           subject: emailContent.subject,
           html: emailContent.html,
           kind: 'order',
-          eventKey: `order-status:${req.params.id}:${status}`,
+          eventKey: `order-status:${orderId}:${status}`,
         });
       })().catch((error) => {
         console.error('[CABBA] order status email:', error?.message ?? error);
