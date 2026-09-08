@@ -1,8 +1,20 @@
 import { Router, Request, Response } from 'express';
 import { query, pool } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
+import { createRateLimiter } from '../rateLimit.js';
+import { sendEmail, orderConfirmationEmail, orderStatusEmail } from '../email.js';
 
 export const storeRouter = Router();
+
+/** 10 commandes / 15 min / compte : le limiteur global (120/min/IP) laissait
+ *  un compte authentifié assécher le stock ou verrouiller les lignes FOR UPDATE. */
+const orderRateLimit = createRateLimiter({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  message: 'طلبات كثيرة جداً. يرجى المحاولة لاحقاً.',
+  keyPrefix: 'orders',
+  keyFn: (req) => req.user?.id ?? req.ip ?? 'unknown',
+});
 
 const mapProduct = (row: any) => ({
   id: row.id, name: row.name, description: row.description,
@@ -106,7 +118,7 @@ storeRouter.get('/orders', requireAdmin, async (_req, res) => {
   }
 });
 
-storeRouter.post('/orders', requireAuth, async (req: Request, res: Response) => {
+storeRouter.post('/orders', requireAuth, orderRateLimit, async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const rawItems = req.body?.items;
@@ -155,8 +167,34 @@ storeRouter.post('/orders', requireAuth, async (req: Request, res: Response) => 
     }
     await client.query('COMMIT');
     res.status(201).json({ order: { ...mapOrder(orderResult.rows[0]), items: lockedItems } });
+
+    // Confirmation de commande — asynchrone et best-effort : une panne Resend
+    // ne doit jamais faire échouer une commande déjà COMMITée. La
+    // déduplication event_key garantit qu'un retry ne renvoie pas deux emails.
+    void (async () => {
+      const owner = await query('SELECT email FROM users WHERE id=$1 AND deleted_at IS NULL', [req.user!.id]);
+      const recipient = owner.rows[0]?.email;
+      if (!recipient) return;
+      const emailContent = orderConfirmationEmail(
+        lockedItems.map((item) => ({ name: item.name, quantity: item.quantity, price: item.price })),
+        total,
+        orderId,
+      );
+      await sendEmail({
+        userId: req.user!.id,
+        to: recipient,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        kind: 'order',
+        eventKey: `order-created:${orderId}`,
+      });
+    })().catch((error) => {
+      console.error('[CABBA] order confirmation email:', error?.message ?? error);
+    });
   } catch (error: any) {
-    await client.query('ROLLBACK');
+    // Le ROLLBACK peut échouer si la connexion est morte (la cause même de
+    // l'erreur) : ne pas masquer l'erreur d'origine.
+    await client.query('ROLLBACK').catch(() => {});
     const message = error instanceof Error ? error.message : 'Order failed';
     if (message.startsWith('المنتج')) { res.status(409).json({ error: message }); return; }
     console.error('[CABBA] create order:', error);
@@ -170,12 +208,81 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
   const allowed = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
   const { status } = req.body ?? {};
   if (!allowed.includes(status)) { res.status(400).json({ error: 'Invalid order status' }); return; }
+
+  const client = await pool.connect();
   try {
-    const result = await query('UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING *', [status, req.params.id]);
-    if (!result.rows.length) { res.status(404).json({ error: 'Order not found' }); return; }
+    await client.query('BEGIN');
+
+    // Verrou FOR UPDATE : deux admins qui annulent la même commande
+    // simultanément ne peuvent pas restocker deux fois.
+    const orderResult = await client.query(
+      'SELECT id, status FROM orders WHERE id=$1 FOR UPDATE',
+      [req.params.id],
+    );
+    if (!orderResult.rows.length) {
+      await client.query('COMMIT');
+      res.status(404).json({ error: 'Order not found' });
+      return;
+    }
+    const previousStatus = orderResult.rows[0].status;
+
+    // BUG MÉTIER corrigé : annuler une commande ne RESTOCKAIT PAS les
+    // produits — chaque annulation réduisait silencieusement l'inventaire.
+    // Restock sauf depuis un état où la marchandise est déjà partie
+    // (delivered) ou déjà rendue (cancelled — idempotence).
+    if (status === 'cancelled' && previousStatus !== 'cancelled' && previousStatus !== 'delivered') {
+      await client.query(
+        `UPDATE products p
+         SET stock = p.stock + oi.quantity, updated_at = NOW()
+         FROM order_items oi
+         WHERE oi.order_id = $1
+           AND oi.product_id IS NOT NULL
+           AND oi.product_id = p.id`,
+        [req.params.id],
+      );
+      // product_id NULL = produit retiré du catalogue depuis l'achat :
+      // la ligne de commande survit (historique), rien à restocker.
+    }
+
+    await client.query(
+      'UPDATE orders SET status=$1, updated_at=NOW() WHERE id=$2',
+      [status, req.params.id],
+    );
+    await client.query('COMMIT');
     res.json({ success: true });
+
+    // Notification de suivi — seulement pour les statuts qui changent
+    // quelque chose POUR LE CLIENT ('pending' et 'processing' = cuisine
+    // interne). Asynchrone, dédupliqué par (commande, statut).
+    const NOTIFY_STATUSES = new Set(['confirmed', 'shipped', 'delivered', 'cancelled']);
+    if (NOTIFY_STATUSES.has(status)) {
+      void (async () => {
+        const owner = await query(
+          `SELECT o.user_id, u.email FROM orders o
+           JOIN users u ON u.id = o.user_id
+           WHERE o.id = $1 AND u.deleted_at IS NULL`,
+          [req.params.id],
+        );
+        const row = owner.rows[0];
+        if (!row) return; // compte anonymisé depuis : rien à notifier.
+        const emailContent = orderStatusEmail(status, req.params.id);
+        await sendEmail({
+          userId: row.user_id,
+          to: row.email,
+          subject: emailContent.subject,
+          html: emailContent.html,
+          kind: 'order',
+          eventKey: `order-status:${req.params.id}:${status}`,
+        });
+      })().catch((error) => {
+        console.error('[CABBA] order status email:', error?.message ?? error);
+      });
+    }
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[CABBA] update order:', error);
     res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
