@@ -14,21 +14,21 @@ export default function OnboardingCarousel({ onComplete }: OnboardingCarouselPro
       icon: CreditCard,
       title: 'بطاقة المشجع الرقمية',
       description: 'احصل على بطاقتك الخاصة، اجمع النقاط عبر حضور المباريات وتفاعل في التطبيق للارتقاء في مستويات المشجعين.',
-      image: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&q=80&w=800&h=600'
+      image: '/onboarding/fan-card.jpg',
     },
     {
       id: 'match-updates',
       icon: Activity,
       title: 'تحديثات المباريات المباشرة',
       description: 'تابع أحداث المباريات لحظة بلحظة، إحصائيات الفريق، التشكيلة، وملخصات الفيديو الحصرية أولاً بأول.',
-      image: 'https://images.unsplash.com/photo-1518605368461-1ee125225026?auto=format&fit=crop&q=80&w=800&h=600'
+      image: '/onboarding/live-match.jpg',
     },
     {
       id: 'community',
       icon: Users,
       title: 'مجتمع الجراد الأصفر',
       description: 'شارك آراءك، توقع نتائج المباريات، وتواصل مع آلاف المشجعين في مجتمع خاص بعشاق أهلي البرج.',
-      image: 'https://images.unsplash.com/photo-1614632537190-23e4146777db?auto=format&fit=crop&q=80&w=800&h=600'
+      image: '/onboarding/community.jpg',
     }
   ];
 
@@ -67,7 +67,15 @@ export default function OnboardingCarousel({ onComplete }: OnboardingCarouselPro
               }`}
             >
               <div className="w-full max-w-sm aspect-[4/3] rounded-3xl overflow-hidden mb-8 relative shadow-[0_10px_30px_rgba(0,0,0,0.5)] border border-zinc-800">
-                <img src={slide.image} alt={slide.title} className="w-full h-full object-cover" />
+                <img
+                  src={slide.image}
+                  alt={slide.title}
+                  // Le premier visuel est critique (premier rendu) ; les deux
+                  // suivants arrivent pendant la lecture du slide 1.
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  className="w-full h-full object-cover"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent"></div>
                 <div className="absolute bottom-4 left-4 right-4 flex justify-center">
                   <div className="w-16 h-16 rounded-2xl bg-yellow-500 text-black flex items-center justify-center shadow-[0_0_20px_rgba(234,179,8,0.4)]">
