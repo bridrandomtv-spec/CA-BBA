@@ -81,7 +81,7 @@ storeRouter.patch('/products/:id', requireAdmin, async (req, res) => {
     const result = await query(
       `UPDATE products SET name=$1, description=$2, price=$3, image_url=$4, category=$5,
        stock=$6, active=$7, updated_at=NOW() WHERE id=$8 RETURNING *`,
-      [name.trim(), typeof description === 'string' ? description.trim() : '', Number(price), imageUrl.trim(), category.trim(), Number(stock), Boolean(active), orderId],
+      [name.trim(), typeof description === 'string' ? description.trim() : '', Number(price), imageUrl.trim(), category.trim(), Number(stock), Boolean(active), req.params.id],
     );
     if (!result.rows.length) { res.status(404).json({ error: 'Product not found' }); return; }
     res.json({ product: mapProduct(result.rows[0]) });
@@ -93,7 +93,7 @@ storeRouter.patch('/products/:id', requireAdmin, async (req, res) => {
 
 storeRouter.delete('/products/:id', requireAdmin, async (req, res) => {
   try {
-    const result = await query('DELETE FROM products WHERE id=$1 RETURNING id', [orderId]);
+    const result = await query('DELETE FROM products WHERE id=$1 RETURNING id', [req.params.id]);
     if (!result.rows.length) { res.status(404).json({ error: 'Product not found' }); return; }
     res.json({ success: true });
   } catch (error) {
