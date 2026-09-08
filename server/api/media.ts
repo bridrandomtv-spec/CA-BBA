@@ -143,3 +143,37 @@ mediaRouter.get('/admin/pending', requireAdmin, async (_req: Request, res: Respo
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+// Purge des uploads périmés : GET /admin/pending LISTAIT les presign jamais
+// finalisés (PUT abandonné, /complete jamais appelé) sans jamais les
+// nettoyer — la table media_assets gonflait et des objets orphelins
+// s'accumulaient dans le bucket. DELETE best-effort : l'objet R2 existe
+// peut-être (PUT réussi) ou pas (presign abandonné).
+mediaRouter.delete('/admin/pending', requireAdmin, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const stale = await query(
+      `SELECT id, object_key FROM media_assets
+       WHERE status='pending' AND created_at < NOW() - INTERVAL '15 minutes'
+       ORDER BY created_at ASC LIMIT 500`,
+    );
+
+    await Promise.allSettled(
+      stale.rows.map((row) => deleteMedia(row.object_key).catch(() => undefined)),
+    );
+
+    const deleted = await query(
+      'DELETE FROM media_assets WHERE id = ANY($1::uuid[])',
+      [stale.rows.map((row) => row.id)],
+    );
+
+    res.json({ purged: deleted.rowCount ?? 0 });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'R2_NOT_CONFIGURED') {
+      res.status(503).json({ error: 'Media storage is not configured' });
+      return;
+    }
+    console.error('[CABBA] media purge:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
