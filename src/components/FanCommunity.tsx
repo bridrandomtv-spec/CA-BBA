@@ -19,12 +19,32 @@ export default function FanCommunity() {
   const { currentUser, userData } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  // Pagination cursor (GET /posts renvoie nextCursor depuis le correctif
+  // community) + notification inline (remplace l'alert() bloquant).
+  const POSTS_PAGE = 30;
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/community/posts')
-      .then((res) => res.ok ? res.json() : Promise.reject(new Error('posts')))
-      .then((data) => setPosts(data.posts ?? []))
-      .catch((error) => console.error('[CABBA] posts:', error));
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const loadPosts = async (before?: string) => {
+    const params = new URLSearchParams({ limit: String(POSTS_PAGE) });
+    if (before) params.set('before', before);
+    const res = await fetch(`/api/community/posts?${params.toString()}`, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error(`posts → ${res.status}`);
+    const data = await res.json().catch(() => ({}));
+    const rows = Array.isArray(data?.posts) ? data.posts : [];
+    setPosts((prev) => (before ? [...prev, ...rows] : rows));
+    setNextCursor(typeof data?.nextCursor === 'string' ? data.nextCursor : null);
+  };
+
+  useEffect(() => {
+    loadPosts().catch((error) => console.error('[CABBA] posts:', error));
   }, []);
 
   const [newPostText, setNewPostText] = useState('');
@@ -65,22 +85,29 @@ export default function FanCommunity() {
   };
 
   const handlePost = async () => {
+    if (!currentUser) {
+      // L'app entière est derrière le login, mais le composant ne doit pas
+      // dépendre de cette garantie : garde locale explicite.
+      setNotice('يجب تسجيل الدخول للنشر.');
+      return;
+    }
     if (!newPostText.trim() && !newPostImage) return;
     setIsUploading(true);
     try {
       const res = await fetch('/api/community/posts', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: newPostText, imageUrl: newPostImage }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'تعذر نشر المنشور');
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر نشر المنشور');
       setPosts((prev) => [data.post, ...prev]);
       setNewPostText('');
       setNewPostImage(null);
     } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : 'تعذر نشر المنشور');
+      console.error('[CABBA] publication:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر نشر المنشور');
     } finally {
       setIsUploading(false);
     }
@@ -88,7 +115,7 @@ export default function FanCommunity() {
 
   const toggleLike = async (postId: string) => {
     try {
-      const res = await fetch(`/api/community/posts/${postId}/like`, { method: 'POST' });
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', credentials: 'same-origin' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'تعذر تحديث الإعجاب');
       setPosts((prev) => prev.map((post) => post.id === postId
@@ -160,6 +187,12 @@ export default function FanCommunity() {
               </div>
             </div>
 
+            {notice && (
+              <div role="status" aria-live="polite" className="mb-3 p-3 rounded-xl border text-sm font-bold bg-red-500/10 border-red-500/30 text-red-400 animate-in fade-in duration-200">
+                {notice}
+              </div>
+            )}
+
             {/* Posts List */}
             <div className="space-y-4">
               {posts.map(post => (
@@ -206,6 +239,28 @@ export default function FanCommunity() {
                 </div>
               ))}
             </div>
+
+            {/* Pagination : curseur created_at fourni par le serveur — le fil
+                ne charge plus toute la table d'un coup. */}
+            {nextCursor && (
+              <button
+                onClick={async () => {
+                  setLoadingMore(true);
+                  try {
+                    await loadPosts(nextCursor);
+                  } catch (error) {
+                    console.error('[CABBA] posts (suite):', error);
+                    setNotice('تعذر تحميل المزيد.');
+                  } finally {
+                    setLoadingMore(false);
+                  }
+                }}
+                disabled={loadingMore}
+                className="w-full mt-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm font-bold hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? 'جاري التحميل...' : 'تحميل المزيد'}
+              </button>
+            )}
           </div>
       </div>
     </div>
