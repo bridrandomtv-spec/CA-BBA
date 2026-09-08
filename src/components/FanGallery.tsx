@@ -119,7 +119,7 @@ export default function FanGallery() {
   };
 
   const canDelete = (post: GalleryPost) =>
-    Boolean(user) && (post.authorId === user.id || userData?.role === 'admin');
+    user != null && (post.authorId === user.id || userData?.role === 'admin');
 
   return (
     <div className="space-y-4">
