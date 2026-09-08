@@ -1,32 +1,42 @@
 /**
  * Authentification par cookie de session signé (JWT).
  *
- * Deux principes appliqués ici :
+ * Principes appliqués ici :
  *
- *  1. **Le jeton ne porte que l'identifiant.** L'ancienne version signait
- *     l'utilisateur entier, rôle compris. Un compte rétrogradé gardait donc ses
- *     droits d'administrateur pendant sept jours, jusqu'à l'expiration du
- *     jeton. Le rôle est désormais relu en base à chaque requête.
+ *  1. **Le jeton ne porte que l'identifiant et la version de session.**
+ *     Le rôle est relu en base à chaque requête : un compte rétrogradé perd
+ *     ses droits immédiatement, pas à l'expiration du jeton.
  *
- *  2. **`requireAdmin` vérifie aussi l'authentification.** Il lisait
- *     `req.user?.role` sans que `requireAuth` ait forcément été monté avant :
- *     sur une route mal câblée, `req.user` valait `undefined`, la comparaison
- *     échouait et renvoyait 403 — le bon refus, mais par accident. Les deux
- *     contrôles sont maintenant liés et ne peuvent plus être dissociés.
+ *  2. **Révocation par `token_version` (migration 011).** Le claim `tv` est
+ *     comparé à la colonne : logout, suppression de compte (migration 012)
+ *     ou reset manuel incrémentent la colonne et tuent toutes les sessions
+ *     existantes — un cookie volé ne survit pas à une déconnexion.
+ *
+ *  3. **`requireAdmin` vérifie aussi l'authentification**, composé en un
+ *     seul RequestHandler (le typage contextuel des handlers suivants est
+ *     préservé, contrairement à un export en tableau).
+ *
+ *  4. **Mots de passe compromis refusés à l'inscription** (HIBP k-anonymity,
+ *     server/passwords.ts) — fail-open : une panne du fournisseur ne bloque
+ *     pas les inscriptions.
+ *
+ *  5. **Droits RGPD** : GET /export (accès + portabilité, sans secret) et
+ *     DELETE /account (effacement par anonymisation — les commandes, pièces
+ *     comptables en ON DELETE RESTRICT, survivent déliées de toute identité).
  */
 
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { query } from './db/index.js';
+import { query, withTransaction } from './db/index.js';
 import { env } from './env.js';
 import { sendWelcomeEmail } from './email.js';
+import { isPasswordCompromised } from './passwords.js';
 
 export const authRouter = Router();
 
-// Le secret est validé au démarrage par server/env.ts : plus de valeur de repli
-// publiée dans le dépôt, avec laquelle n'importe qui pouvait forger un cookie
-// de session portant `role: "admin"`.
+// Le secret est validé au démarrage par server/env.ts : plus de valeur de
+// repli publiée dans le dépôt.
 const JWT_SECRET = env.sessionSecret;
 
 /** Durée de vie de la session, partagée entre le jeton et le cookie. */
@@ -60,8 +70,12 @@ declare global {
   }
 }
 
-/** Colonnes renvoyées par toutes les requêtes utilisateur, en un seul endroit. */
-const USER_COLUMNS = 'id, email, display_name, avatar_url, role, created_at';
+/**
+ * Colonnes renvoyées par toutes les requêtes utilisateur, en un seul endroit.
+ * `token_version` est inclus pour la vérification de session mais n'est
+ * jamais exposé au client (toAuthUser ne le mappe pas).
+ */
+const USER_COLUMNS = 'id, email, display_name, avatar_url, role, created_at, token_version';
 
 interface UserRow {
   id: string;
@@ -70,6 +84,7 @@ interface UserRow {
   avatar_url: string | null;
   role: Role;
   created_at: Date;
+  token_version: number;
 }
 
 function toAuthUser(row: UserRow): AuthUser {
@@ -97,10 +112,11 @@ export function isEmailShaped(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-const setSessionCookie = (res: Response, userId: string) => {
-  // Charge utile minimale : `sub` seul. Tout le reste (nom, rôle, avatar) est
-  // relu en base, donc jamais périmé et jamais falsifiable côté client.
-  const token = jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: `${SESSION_DAYS}d` });
+const setSessionCookie = (res: Response, userId: string, tokenVersion: number) => {
+  // Charge utile minimale : `sub` + `tv` (version de session). Tout le reste
+  // (nom, rôle, avatar) est relu en base, donc jamais périmé et jamais
+  // falsifiable côté client.
+  const token = jwt.sign({ sub: userId, tv: tokenVersion }, JWT_SECRET, { expiresIn: `${SESSION_DAYS}d` });
   res.cookie('session', token, {
     httpOnly: true,
     secure: env.isProduction,
@@ -119,9 +135,8 @@ const clearSessionCookie = (res: Response) => {
 
 /**
  * Vérifie le cookie de session et charge l'utilisateur depuis la base.
- *
  * Une requête SQL par appel : c'est le prix de la révocation immédiate des
- * droits. Sur cette application, le volume ne le justifie pas d'optimiser.
+ * droits et des sessions.
  */
 export const requireAuth: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies?.session;
@@ -132,27 +147,47 @@ export const requireAuth: RequestHandler = async (req: Request, res: Response, n
   }
 
   let userId: string;
+  let tokenVersion: unknown;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { sub?: unknown };
+    const decoded = jwt.verify(token, JWT_SECRET) as { sub?: unknown; tv?: unknown };
     if (typeof decoded.sub !== 'string') throw new Error('sub manquant');
     userId = decoded.sub;
+    tokenVersion = decoded.tv;
   } catch {
     clearSessionCookie(res);
     res.status(401).json({ error: 'Invalid or expired session' });
     return;
   }
 
+  // Jeton signé avant la migration 011 (pas de claim `tv`) : accepté contre
+  // la version 1, le temps que les sessions pré-migration expirent.
+  const expectedVersion = typeof tokenVersion === 'number' ? tokenVersion : 1;
+
   try {
-    const result = await query<UserRow>(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1`, [userId]);
+    // deleted_at IS NULL : un compte anonymisé (RGPD) ne ressuscite pas via
+    // un ancien cookie.
+    const result = await query<UserRow>(
+      `SELECT ${USER_COLUMNS} FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
 
     if (result.rows.length === 0) {
-      // Compte supprimé alors qu'une session était encore ouverte.
+      // Compte supprimé/anonymisé alors qu'une session était encore ouverte.
       clearSessionCookie(res);
       res.status(401).json({ error: 'Invalid or expired session' });
       return;
     }
 
-    req.user = toAuthUser(result.rows[0]);
+    const row = result.rows[0];
+
+    if (row.token_version !== expectedVersion) {
+      // Session révoquée côté serveur (logout, suppression, reset…).
+      clearSessionCookie(res);
+      res.status(401).json({ error: 'Session revoked' });
+      return;
+    }
+
+    req.user = toAuthUser(row);
     next();
   } catch (error) {
     console.error('[CABBA] échec du chargement de la session :', error);
@@ -171,15 +206,13 @@ const ensureAdmin: RequestHandler = (req: Request, res: Response, next: NextFunc
 
 /**
  * À monter tel quel sur une route réservée aux administrateurs :
- * `router.post('/', requireAdmin, handler)`. Les deux contrôles restent
- * inséparables, mais composés en un seul handler plutôt qu'exportés en tableau :
- * un tableau passé comme argument unique fait perdre à TypeScript le typage
- * contextuel de `req`/`res` sur le handler suivant.
+ * `router.post('/', requireAdmin, handler)`.
  */
 export const requireAdmin: RequestHandler = async (req, res, next) => {
   let authenticated = false;
   // Callback intermédiaire : transmettre le `next` d'Express à requireAuth
-  // enchaînerait directement sur le handler et court-circuiterait le contrôle admin.
+  // enchaînerait directement sur le handler et court-circuiterait le contrôle
+  // admin.
   await requireAuth(req, res, () => {
     authenticated = true;
   });
@@ -218,6 +251,16 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // HIBP (k-anonymity) : refuse les mots de passe présents dans des fuites
+    // connues. `null` = vérification impossible → fail-open journalisé.
+    const compromised = await isPasswordCompromised(password);
+    if (compromised === true) {
+      res.status(400).json({
+        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة. يرجى اختيار كلمة مرور أخرى.',
+      });
+      return;
+    }
+
     if (trimmedName.length > 100) {
       res.status(400).json({ error: 'الاسم طويل جداً.' });
       return;
@@ -232,7 +275,8 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     // Le rôle est écrit en dur : un `role` envoyé dans le corps de la requête
-    // ne doit jamais pouvoir créer un administrateur.
+    // ne doit jamais pouvoir créer un administrateur. token_version vaut 1
+    // (défaut de la colonne) et est signé dans le cookie de session.
     const result = await query<UserRow>(
       `INSERT INTO users (email, password_hash, display_name, role)
        VALUES ($1, $2, $3, 'user')
@@ -240,8 +284,9 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
       [normalizedEmail, passwordHash, trimmedName],
     );
 
-    const user = toAuthUser(result.rows[0]);
-    setSessionCookie(res, user.id);
+    const row = result.rows[0];
+    const user = toAuthUser(row);
+    setSessionCookie(res, user.id, row.token_version);
     res.status(201).json({ user });
 
     // L'envoi est volontairement asynchrone : une panne du fournisseur email
@@ -265,7 +310,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     }
 
     const result = await query<UserRow & { password_hash: string }>(
-      `SELECT ${USER_COLUMNS}, password_hash FROM users WHERE email = $1`,
+      `SELECT ${USER_COLUMNS}, password_hash FROM users WHERE email = $1 AND deleted_at IS NULL`,
       [normalizeEmail(email)],
     );
 
@@ -282,7 +327,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     }
 
     const user = toAuthUser(row);
-    setSessionCookie(res, user.id);
+    setSessionCookie(res, user.id, row.token_version);
     res.json({ user });
   } catch (error) {
     console.error('Login error:', error);
@@ -290,9 +335,22 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
   }
 });
 
-authRouter.post('/logout', (_req: Request, res: Response) => {
-  clearSessionCookie(res);
-  res.json({ success: true });
+// Le logout est authentifié et incrémente token_version : révoque côté
+// serveur tous les jetons émis pour ce compte. Un appel sans cookie reçoit
+// 401 ; le client (AuthContext.logout) nettoie quand même son état local.
+authRouter.post('/logout', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    await query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [req.user!.id]);
+    clearSessionCookie(res);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Le cookie est supprimé même si la révocation en base échoue : la
+    // session reste révoquable au prochain appel, l'utilisateur n'est pas
+    // bloqué.
+    clearSessionCookie(res);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 authRouter.get('/me', requireAuth, (req: Request, res: Response) => {
@@ -350,11 +408,118 @@ authRouter.patch('/profile', requireAuth, async (req: Request, res: Response): P
       return;
     }
 
-    // Plus besoin de rafraîchir le cookie : il ne contient que l'identifiant,
-    // et les données du profil sont relues en base à chaque requête.
+    // Pas besoin de rafraîchir le cookie : `sub` et `tv` ne changent pas lors
+    // d'une mise à jour de profil.
     res.json({ user: toAuthUser(result.rows[0]) });
   } catch (error) {
     console.error('Update profile error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/auth/export — droit d'accès et portabilité (RGPD art. 15 & 20).
+ * Retourne toutes les données rattachées au compte. Deux exclusions
+ * volontaires : `password_hash` (secret) et `p256dh`/`auth` des abonnements
+ * push (matériel cryptographique d'appareil, sensible et inutile).
+ */
+authRouter.get('/export', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+
+    const [ordersResult, orderItemsResult, membershipsResult, postsResult, commentsResult, likesResult, mediaResult, pushResult, pushLogResult] =
+      await Promise.all([
+        query('SELECT id, total, status, created_at, updated_at FROM orders WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
+        query(
+          `SELECT oi.order_id, oi.product_name, oi.quantity, oi.unit_price
+           FROM order_items oi JOIN orders o ON o.id = oi.order_id
+           WHERE o.user_id = $1`,
+          [userId],
+        ),
+        query('SELECT id, member_number, type, status, start_date, expiration_date, created_at FROM memberships WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
+        query('SELECT id, content, image_url, created_at FROM posts WHERE author_id = $1 ORDER BY created_at DESC', [userId]),
+        query('SELECT id, post_id, content, created_at FROM post_comments WHERE author_id = $1 ORDER BY created_at DESC', [userId]),
+        query('SELECT post_id, created_at FROM post_likes WHERE user_id = $1 ORDER BY created_at DESC', [userId]),
+        query('SELECT id, object_key, original_name, content_type, size_bytes, kind, status, created_at FROM media_assets WHERE owner_id = $1 ORDER BY created_at DESC', [userId]),
+        query('SELECT id, endpoint, goals, matches, team_news, final_scores, created_at FROM push_subscriptions WHERE user_id = $1', [userId]),
+        query('SELECT category, event_key, created_at FROM push_notification_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 500', [userId]),
+      ]);
+
+    // email_log peut être vide selon l'installation : l'export se dégrade
+    // proprement plutôt que de renvoyer 500.
+    const emailRows = await query('SELECT * FROM email_log WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100', [userId])
+      .then((result) => result.rows)
+      .catch(() => []);
+
+    const orders = ordersResult.rows.map((order) => ({
+      ...order,
+      items: orderItemsResult.rows.filter((item) => item.order_id === order.id),
+    }));
+
+    res.setHeader('Content-Disposition', `attachment; filename="cabba-export-${userId}.json"`);
+    res.json({
+      generatedAt: new Date().toISOString(),
+      profile: req.user,
+      orders,
+      memberships: membershipsResult.rows,
+      posts: postsResult.rows,
+      postComments: commentsResult.rows,
+      postLikes: likesResult.rows,
+      media: mediaResult.rows,
+      pushSubscriptions: pushResult.rows,
+      pushLog: pushLogResult.rows,
+      emailLog: emailRows,
+    });
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/auth/account — droit à l'effacement (RGPD art. 17).
+ * Anonymisation en UNE transaction : données sociales supprimées, ligne
+ * users rendue non-identifiante, token_version incrémenté (toute session
+ * ouverte meurt immédiatement). Les commandes sont CONSERVÉES (pièces
+ * comptables, ON DELETE RESTRICT) mais déliées de toute identité. L'email
+ * libéré (`deleted+<uuid>@deleted.invalid`, unique par construction) permet
+ * au supporter de se réinscrire avec son adresse d'origine.
+ */
+authRouter.delete('/account', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user!.id;
+
+  try {
+    await withTransaction(async (exec) => {
+      // La ligne users n'étant pas supprimée, les ON DELETE CASCADE ne se
+      // déclenchent pas : chaque table enfant est nettoyée explicitement.
+      await exec('DELETE FROM push_notification_log WHERE user_id = $1', [userId]);
+      await exec('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+      await exec('DELETE FROM media_assets WHERE owner_id = $1', [userId]);
+      await exec('DELETE FROM memberships WHERE user_id = $1', [userId]);
+      await exec('DELETE FROM post_likes WHERE user_id = $1', [userId]);
+      await exec('DELETE FROM post_comments WHERE author_id = $1', [userId]);
+      await exec('DELETE FROM posts WHERE author_id = $1', [userId]);
+      await exec('DELETE FROM email_log WHERE user_id = $1', [userId]);
+      // orders / order_items : volontairement CONSERVÉS (comptabilité).
+
+      await exec(
+        `UPDATE users
+         SET email = 'deleted+' || id || '@deleted.invalid',
+             display_name = 'حساب محذوف',
+             avatar_url = NULL,
+             password_hash = '!',
+             deleted_at = NOW(),
+             token_version = token_version + 1
+         WHERE id = $1`,
+        [userId],
+      );
+      // password_hash = '!' : aucune saisie ne peut plus correspondre.
+    });
+
+    clearSessionCookie(res);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Account deletion error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
