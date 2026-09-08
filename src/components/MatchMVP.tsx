@@ -1,134 +1,210 @@
-import { useState } from 'react';
-import { Star, CheckCircle2, Share2 } from 'lucide-react';
+// Vote « homme du match » — RÉEL et persisté (migration 015).
+//
+// Findings corrigés :
+//  1. `initialCandidates = []` + votes dans un useState : le « رجل المباراة »
+//     du README n'agrégeait RIEN. Candidats = titulaires réels du match
+//     (match_lineups), votes en base.
+//  2. `alert("تم نسخ الرابط!")` MENTAIT : rien n'était copié. Vrai
+//     navigator.clipboard + Web Share API avec URL deep-link (/#/match).
+//  3. Composant sans match ciblé : prop `matchId` optionnelle (MatchCenter
+//     peut passer `selectedId`), sinon résolution via lib/featuredMatch.
+import { useCallback, useEffect, useState } from 'react';
+import { Trophy, Loader2, Share2, Check } from 'lucide-react';
+import { resolveFeaturedMatchId } from '../lib/featuredMatch';
 
 interface MVPCandidate {
-  id: string;
-  name: string;
-  number: string;
-  position: string;
+  playerApiId: number;
+  playerName: string;
+  number: number | null;
+  position: string | null;
+  teamApiId: number | null;
   votes: number;
+  isMyVote: boolean;
 }
 
-const initialCandidates: MVPCandidate[] = [];
+interface MVPMatch {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  status: string;
+  homeTeamApiId: number | null;
+  awayTeamApiId: number | null;
+}
 
-export default function MatchMVP() {
-  const [candidates, setCandidates] = useState<MVPCandidate[]>(initialCandidates);
-  const [votedCandidate, setVotedCandidate] = useState<string | null>(null);
+const POSITION_LABELS: Record<string, string> = {
+  G: 'حارس', D: 'دفاع', M: 'وسط', A: 'هجوم',
+};
 
-  const totalVotes = candidates.reduce((sum, c) => sum + c.votes, 0);
+export default function MatchMVP({ matchId }: { matchId?: string }) {
+  const [match, setMatch] = useState<MVPMatch | null>(null);
+  const [candidates, setCandidates] = useState<MVPCandidate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [voting, setVoting] = useState<number | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({ title: "صوّتت لـ MVP", text: "لقد قمت بالتصويت لأفضل لاعب في المباراة!" });
-    } else {
-      alert("تم نسخ الرابط!");
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const load = useCallback(async (targetId?: string) => {
+    try {
+      const resolvedId = targetId ?? matchId ?? (await resolveFeaturedMatchId());
+      if (!resolvedId) return;
+      const res = await fetch(`/api/matches/${encodeURIComponent(resolvedId)}/mvp`, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`mvp → ${res.status}`);
+      const data = await res.json();
+      setMatch(data.match ?? null);
+      setCandidates(Array.isArray(data.candidates) ? data.candidates : []);
+    } catch (error) {
+      console.error('[CABBA] mvp:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [matchId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const handleVote = async (candidate: MVPCandidate) => {
+    if (!match) return;
+    if (match.status !== 'live' && match.status !== 'finished') {
+      setNotice('التصويت متاح أثناء المباراة وبعدها فقط.');
+      return;
+    }
+    setVoting(candidate.playerApiId);
+    try {
+      const res = await fetch(`/api/matches/${encodeURIComponent(match.id)}/mvp/vote`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerApiId: candidate.playerApiId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر تسجيل التصويت');
+      setNotice('تم تسجيل تصويتك! 🟡⚫');
+      await load(match.id);
+    } catch (error) {
+      console.error('[CABBA] mvp vote:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر تسجيل التصويت');
+    } finally {
+      setVoting(null);
     }
   };
 
-  const handleVote = (candidateId: string) => {
-    if (votedCandidate) return;
-
-    setVotedCandidate(candidateId);
-    setCandidates(prev => 
-      prev.map(c => 
-        c.id === candidateId ? { ...c, votes: c.votes + 1 } : c
-      ).sort((a, b) => b.votes - a.votes)
-    );
+  // Partage honnête : Web Share si disponible, sinon VRAIE copie presse-
+  // papiers avec confirmation — l'ancien alert() annonçait une copie jamais
+  // effectuée.
+  const handleShare = async () => {
+    const url = `${window.location.origin}/#/match`;
+    const shareData = {
+      title: 'صوّت لرجل المباراة — CABBA',
+      text: 'صوّت لأفضل لاعب في مباراة الكابا!',
+      url,
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); return; } catch { /* partage annulé : repli copie */ }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setNotice('تم نسخ الرابط!');
+    } catch {
+      setNotice('تعذر نسخ الرابط.');
+    }
   };
 
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 animate-in fade-in slide-in-from-right-4 shadow-sm">
-      <div className="text-center mb-6 relative">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl"></div>
-        <Star className="text-yellow-500 w-12 h-12 mx-auto mb-3 relative z-10 drop-shadow-[0_0_15px_rgba(234,179,8,0.5)]" />
-        <h3 className="font-bold text-white text-lg mb-2 relative z-10">نجم المباراة</h3>
-        <p className="text-xs text-zinc-400 relative z-10">صوت للاعب المفضل لديك في هذه المباراة. يتم إعلان الفائز بعد النهاية.</p>
+  if (loading) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center justify-center h-40">
+        <Loader2 size={20} className="animate-spin text-yellow-500" />
       </div>
-      
-      {candidates.length > 0 ? (
-        <>
-          <div className="space-y-3">
-            {candidates.map((candidate, index) => {
-              const percentage = totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0;
-              const isVoted = votedCandidate === candidate.id;
-              const rank = index + 1;
-              
-              return (
-                <button 
-                  key={candidate.id}
-                  disabled={votedCandidate !== null}
-                  onClick={() => handleVote(candidate.id)}
-                  className={`w-full relative overflow-hidden border rounded-xl p-3 flex items-center justify-between transition-all ${
-                    votedCandidate
-                      ? isVoted 
-                        ? 'border-yellow-500 bg-yellow-500/5' 
-                        : 'border-zinc-800 bg-zinc-800/20 opacity-70'
-                      : 'bg-zinc-800/50 hover:bg-zinc-800 border-zinc-700 hover:border-yellow-500/50'
-                  }`}
-                >
-                  {votedCandidate && (
-                    <div 
-                      className={`absolute top-0 right-0 h-full -z-10 transition-all duration-1000 ease-out ${
-                        isVoted ? 'bg-yellow-500/20' : 'bg-zinc-800/50'
-                      }`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  )}
-                  
-                  <div className="flex items-center gap-3 relative z-10">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
-                      rank === 1 && votedCandidate ? 'bg-yellow-500 text-black shadow-[0_0_10px_rgba(234,179,8,0.4)]' : 'bg-zinc-700 text-white'
-                    }`}>
-                      {candidate.number}
-                    </div>
-                    <div className="text-right">
-                      <span className={`font-bold text-sm block ${isVoted ? 'text-yellow-500' : 'text-white'}`}>
-                        {candidate.name}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 block">{candidate.position}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="relative z-10 flex items-center gap-2">
-                    {votedCandidate && (
-                      <span className={`text-xs font-bold ${isVoted ? 'text-yellow-500' : 'text-zinc-400'}`}>
-                        {percentage}%
-                      </span>
-                    )}
-                    {isVoted && <CheckCircle2 size={16} className="text-yellow-500" />}
-                    {!votedCandidate && (
-                      <div className="w-5 h-5 rounded-full border-2 border-zinc-500 flex items-center justify-center"></div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          
-          {!votedCandidate && (
-            <div className="mt-6 text-center text-xs text-zinc-500 bg-zinc-800/50 py-2 rounded-lg">
-              اختر لاعباً للتصويت ومعرفة النتائج الحالية
-            </div>
-          )}
-          
-          {votedCandidate && (
-            <div className="mt-6 flex flex-col gap-3">
-              <div className="text-center text-xs text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 py-2 rounded-lg font-bold">
-                تم تسجيل تصويتك بنجاح! شكراً لمشاركتك.
-              </div>
-              <button 
-                onClick={handleShare}
-                className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <Share2 size={16} /> شارك تصويتك
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="text-center text-zinc-500 py-6 border border-zinc-800 border-dashed rounded-xl">
-          التصويت غير متوفر حالياً
+    );
+  }
+
+  if (!match || candidates.length === 0) {
+    return (
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
+        <Trophy size={32} className="text-zinc-600 mx-auto mb-3" />
+        <h4 className="font-bold text-zinc-400 mb-1">رجل المباراة</h4>
+        <p className="text-xs text-zinc-500">
+          سيتوفر التصويت مع نشر تشكيلة المباراة (تُزامَن تلقائياً قبل انطلاق المباريات المغطاة).
+        </p>
+      </div>
+    );
+  }
+
+  const totalVotes = candidates.reduce((sum, candidate) => sum + candidate.votes, 0);
+  const voteOpen = match.status === 'live' || match.status === 'finished';
+  const teamOf = (candidate: MVPCandidate) =>
+    candidate.teamApiId === match.homeTeamApiId ? match.homeTeam : match.awayTeam;
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm animate-in fade-in slide-in-from-right-4" dir="rtl">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Trophy size={18} className="text-yellow-500" />
+          <h3 className="font-bold text-white text-sm">رجل المباراة</h3>
         </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-zinc-500 font-bold">{totalVotes} صوت</span>
+          <button
+            onClick={() => void handleShare()}
+            aria-label="مشاركة التصويت"
+            className="p-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+          >
+            <Share2 size={14} />
+          </button>
+        </div>
+      </div>
+
+      {notice && (
+        <div role="status" aria-live="polite" className="mb-3 p-2.5 rounded-xl border text-xs font-bold bg-yellow-500/10 border-yellow-500/30 text-yellow-400 animate-in fade-in duration-200">
+          {notice}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {candidates.map((candidate) => {
+          const percent = totalVotes > 0 ? Math.round((candidate.votes / totalVotes) * 100) : 0;
+          return (
+            <button
+              key={candidate.playerApiId}
+              onClick={() => void handleVote(candidate)}
+              disabled={!voteOpen || voting !== null}
+              className={`w-full relative overflow-hidden rounded-xl border p-3 text-right transition-colors disabled:cursor-default ${
+                candidate.isMyVote
+                  ? 'border-yellow-500/50 bg-yellow-500/5'
+                  : 'border-zinc-800 bg-zinc-800/40 hover:border-zinc-700'
+              }`}
+            >
+              {/* Barre de progression en fond : lecture immédiate du rapport de forces. */}
+              <div
+                className="absolute inset-y-0 right-0 bg-yellow-500/10 transition-all duration-500"
+                style={{ width: `${percent}%` }}
+                aria-hidden="true"
+              />
+              <div className="relative flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {candidate.isMyVote && <Check size={14} className="text-yellow-500 shrink-0" aria-label="تصويتي" />}
+                  {voting === candidate.playerApiId && <Loader2 size={14} className="animate-spin text-zinc-400 shrink-0" />}
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-white truncate">
+                      {candidate.number ? `${candidate.number}. ` : ''}{candidate.playerName}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 truncate">
+                      {teamOf(candidate)}{candidate.position ? ` · ${POSITION_LABELS[candidate.position] ?? candidate.position}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-xs font-black text-yellow-500 shrink-0">{percent}%</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {!voteOpen && (
+        <p className="text-[10px] text-zinc-600 mt-3 text-center">يفتح التصويت مع انطلاق المباراة.</p>
       )}
     </div>
   );
