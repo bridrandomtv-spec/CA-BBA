@@ -14,6 +14,21 @@ interface Highlight {
   createdAt: number;
 }
 
+// Un videoUrl pointant vers un fichier direct (R2/mp4) rendu dans un
+// <iframe> affichait un téléchargement ou un lecteur brut selon le
+// navigateur. Le choix du média suit la nature de l'URL ; l'iframe embed
+// reste réservée aux hôtes autorisés par la CSP frame-src (self + YouTube).
+const EMBED_HOSTS = ['youtube.com', 'youtube-nocookie.com', 'youtu.be'];
+
+function isEmbedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return EMBED_HOSTS.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
+  } catch {
+    return false;
+  }
+}
+
 export default function MatchHighlights() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -53,7 +68,7 @@ export default function MatchHighlights() {
           {highlights.map(highlight => (
             <div key={highlight.id} onClick={() => setPlayingId(highlight.id)} className="w-[280px] flex-none bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden group snap-center shadow-lg cursor-pointer">
               <div className="relative aspect-video">
-                <img src={highlight.thumbnail} alt={highlight.title} className="w-full h-full object-cover" />
+                <img src={highlight.thumbnail} alt={highlight.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
                   <div className="w-12 h-12 rounded-full bg-yellow-500 text-black flex items-center justify-center shadow-[0_0_15px_rgba(234,179,8,0.5)] scale-90 group-hover:scale-100 transition-transform">
@@ -94,19 +109,32 @@ export default function MatchHighlights() {
             <X size={24} />
           </button>
           
-          <div className="w-full max-w-3xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-[0_0_50px_rgba(234,179,8,0.15)] relative flex items-center justify-center group">
-             {highlights.find(h => h.id === playingId)?.videoUrl ? (
-               <iframe 
-                 src={highlights.find(h => h.id === playingId)?.videoUrl} 
-                 className="w-full h-full"
-                 allowFullScreen
-               ></iframe>
-             ) : (
-               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-zinc-500">
-                  <Play size={48} className="text-zinc-600" />
-                  <p className="font-bold text-sm">الفيديو غير متوفر</p>
-               </div>
-             )}
+          <div className="w-full max-w-3xl aspect-video bg-black rounded-2xl overflow-hidden border border-zinc-800 shadow-[0_0_50px_rgba(234,179,8,0.15)] \1
+            {(() => {
+              const active = highlights.find(h => h.id === playingId);
+              if (!active?.videoUrl) {
+                return (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-zinc-500">
+                    <Play size={48} className="text-zinc-600" />
+                    <p className="font-bold text-sm">الفيديو غير متوفر</p>
+                  </div>
+                );
+              }
+              return isEmbedUrl(active.videoUrl) ? (
+                <iframe
+                  src={active.videoUrl}
+                  title={active.title}
+                  className="w-full h-full"
+                  allowFullScreen
+                  allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  loading="lazy"
+                ></iframe>
+              ) : (
+                // Fichier direct (R2/mp4) : lecteur natif, contrôles visibles.
+                <video src={active.videoUrl} controls autoPlay playsInline className="w-full h-full bg-black" />
+              );
+            })()}
           </div>
           
           <div className="w-full max-w-3xl mt-4 text-right">
