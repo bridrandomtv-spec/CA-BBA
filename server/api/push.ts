@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { query } from '../db/index.js';
 import { requireAuth } from '../auth.js';
 import { deletePushSubscription, getPushState, isPushConfigured, savePushSubscription, sendPushToUser, updatePushPreferences } from '../notifications.js';
 
@@ -14,7 +15,29 @@ pushRouter.get('/state', requireAuth, async (req, res) => {
 });
 
 pushRouter.post('/subscribe', requireAuth, async (req, res) => {
-  try { await savePushSubscription(req.user!.id, req.body); res.status(201).json({ success: true }); }
+  try {
+    await savePushSubscription(req.user!.id, req.body);
+
+    // Plafond d'endpoints par compte : sans limite, un compte (compromis ou
+    // scripté) pouvait enregistrer des milliers d'abonnements — gonflement du
+    // stockage ET amplification de l'envoi (chaque notification de but
+    // fan-out vers tous les endpoints). Politique : les 10 plus récents
+    // conservés (updated_at est rafraîchi par le re-subscribe des appareils
+    // actifs), les plus anciens écrêtés silencieusement.
+    await query(
+      `DELETE FROM push_subscriptions
+       WHERE user_id = $1
+         AND id NOT IN (
+           SELECT id FROM push_subscriptions
+           WHERE user_id = $1
+           ORDER BY updated_at DESC
+           LIMIT 10
+         )`,
+      [req.user!.id],
+    );
+
+    res.status(201).json({ success: true });
+  }
   catch (error) { console.error('[CABBA] push subscribe:', error); res.status(400).json({ error: 'Invalid push subscription' }); }
 });
 
