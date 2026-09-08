@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, Heart, Search, Filter, Music } from 'lucide-react';
 import { Chant } from './admin/AdminChants';
 
@@ -8,41 +8,72 @@ export default function ChantsLibrary() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const [playing, setPlaying] = useState<string | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    fetch('/api/chants')
-      .then(res => res.json())
-      .then(data => setChants(data.chants))
-      .catch(e => console.error(e));
+    fetch('/api/chants', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`chants → ${res.status}`))))
+      .then((data) => setChants(Array.isArray(data?.chants) ? data.chants : []))
+      .catch((error) => console.error('[CABBA] chants:', error));
 
+    // La REF est lue au démontage avec sa valeur courante : la lecture
+    // s'arrête vraiment quand l'utilisateur change d'onglet. L'ancien
+    // cleanup lisait l'ÉTAT audioElement capturé au montage — toujours
+    // null — et le chant continuait de jouer par-dessus les autres écrans.
     return () => {
-      if (audioElement) {
-        audioElement.pause();
-      }
+      audioRef.current?.pause();
+      audioRef.current = null;
     };
-  }, []); // eslint-disable-line
+  }, []);
 
   const handlePlay = async (chant: Chant) => {
     if (!chant.audioUrl) return;
-    
+
+    // Même chant : bascule lecture/pause.
     if (playing === chant.id) {
-      audioElement?.pause();
+      audioRef.current?.pause();
+      audioRef.current = null;
       setPlaying(null);
-    } else {
-      if (audioElement) {
-        audioElement.pause();
+      return;
+    }
+
+    // Autre chant : couper le précédent avant d'en démarrer un nouveau.
+    audioRef.current?.pause();
+    const audio = new Audio(chant.audioUrl);
+    audioRef.current = audio;
+    setPlaying(chant.id);
+
+    try {
+      await audio.play();
+    } catch (error) {
+      // Lecture refusée (autoplay policy, URL morte) : ne pas laisser
+      // l'indicateur « en cours » actif sur une piste muette.
+      console.error('[CABBA] lecture audio:', error);
+      if (audioRef.current === audio) audioRef.current = null;
+      setPlaying(null);
+      return;
+    }
+
+    // Fin naturelle : réinitialise l'icône de lecture. La garde `=== audio`
+    // évite qu'un chant achevé tardivement n'éteigne le suivant déjà lancé.
+    audio.onended = () => {
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+        setPlaying(null);
       }
-      const audio = new Audio(chant.audioUrl);
-      audio.play().catch(e => console.error("Error playing audio", e));
-      setAudioElement(audio);
-      setPlaying(chant.id);
-      
-      try {
-        await fetch(`/api/chants/${chant.id}/view`, { method: 'POST' });
-        // optimistic update
-        setChants(chants.map(c => c.id === chant.id ? { ...c, views: (c.views || 0) + 1 } : c));
-      } catch(e) {}
+    };
+
+    // Compteur de vues : best-effort, jamais bloquant pour la lecture.
+    try {
+      await fetch(`/api/chants/${encodeURIComponent(chant.id)}/view`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      setChants((prev) =>
+        prev.map((c) => (c.id === chant.id ? { ...c, views: (c.views || 0) + 1 } : c)),
+      );
+    } catch {
+      /* vue non comptée : sans impact utilisateur */
     }
   };
 
