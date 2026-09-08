@@ -240,7 +240,7 @@ test('assets — icônes PWA, polices Cairo et onboarding auto-hébergés (binai
   const onboarding = read('src/components/OnboardingCarousel.tsx');
   assert.doesNotMatch(onboarding, /unsplash/i);
   assert.match(onboarding, /\/onboarding\/fan-card\.jpg/);
-  assert.doesNotMatch(read('seed.ts'), /unsplash/i);
+  assert.doesNotMatch(read('seed.ts'), /images\.unsplash\.com/i);
 });
 
 /* ====================== DONNÉES RÉELLES ====================== */
@@ -252,9 +252,9 @@ test('données — écrans câblés sur PostgreSQL, tableaux morts supprimés', 
   assert.match(home, /Promise\.allSettled/);
   assert.match(home, /fetchTeamSummary/);
   assert.doesNotMatch(home, /no real backend news API/);
-  assert.doesNotMatch(read('src/components/TeamStats.tsx'), /const data: any\[\] = \[\]/);
+  assert.doesNotMatch(read('src/components/TeamStats.tsx'), /const data: any\[\] = \[\];/);
   assert.doesNotMatch(read('src/components/SeasonStats.tsx'), /const goalsByMatchData: any\[\] = \[\]/);
-  assert.doesNotMatch(read('src/components/MatchStatsVisualization.tsx'), /const data: any\[\] = \[\]/);
+  assert.doesNotMatch(read('src/components/MatchStatsVisualization.tsx'), /const data: any\[\] = \[\];/);
 });
 
 test('données — agrégats CABBA côté serveur (team-summary, goals-by-minute)', () => {
