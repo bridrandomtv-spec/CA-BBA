@@ -247,7 +247,7 @@ export default function App() {
 
         {/* Zone de contenu — le `relative` ancre FAB, panneau IA et bandeau
             de consentement SANS recouvrir le rail. */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
 
           {/* RGPD (n°16) : pas de bandeau pendant l'onboarding — deux modales
               plein écran au premier lancement seraient empilées. */}
