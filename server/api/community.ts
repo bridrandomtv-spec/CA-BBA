@@ -195,3 +195,125 @@ communityRouter.delete('/posts/:id', requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+// ================= COMMENTAIRES (retour terrain démo) =================
+// La table post_comments existe depuis la migration 004 et le compteur était
+// affiché sur chaque carte — mais AUCUNE route ne permettait d'écrire ou de
+// lire un commentaire : le bouton 💬 était purement décoratif.
+
+const mapComment = (row: any) => ({
+  id: row.id,
+  authorId: row.author_id,
+  author: row.display_name || 'مشجع البرج',
+  avatar: row.avatar_url || DEFAULT_AVATAR,
+  content: row.content,
+  time: new Date(row.created_at).toLocaleString('ar-DZ'),
+});
+
+/** 10 commentaires/minute/compte : le fil ne doit pas devenir un chat floodé. */
+const commentRateLimit = createRateLimiter({
+  windowMs: 60_000,
+  limit: 10,
+  message: 'تعليقات كثيرة في وقت قصير. حاول بعد دقيقة.',
+  keyPrefix: 'community-comment',
+  keyFn: (req) => req.user?.id ?? req.ip ?? 'unknown',
+});
+
+const COMMENT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-7][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** GET /posts/:id/comments — liste chronologique, bornée à 200. */
+communityRouter.get('/posts/:id/comments', requireAuth, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT c.id, c.author_id, c.content, c.created_at, u.display_name, u.avatar_url
+       FROM post_comments c
+       JOIN users u ON u.id = c.author_id
+       WHERE c.post_id = $1
+       ORDER BY c.created_at ASC
+       LIMIT 200`,
+      [req.params.id],
+    );
+    res.json({ comments: result.rows.map(mapComment) });
+  } catch (error) {
+    console.error('[CABBA] comments list:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** POST /posts/:id/comments — auteur identifié, contenu borné (2 000). */
+communityRouter.post('/posts/:id/comments', requireAuth, commentRateLimit, async (req, res) => {
+  try {
+    const { content } = req.body ?? {};
+    if (typeof content !== 'string' || !content.trim()) {
+      res.status(400).json({ error: 'التعليق لا يمكن أن يكون فارغاً.' });
+      return;
+    }
+    const cleanContent = content.trim();
+    if (cleanContent.length > 2000) {
+      res.status(400).json({ error: 'التعليق طويل جداً.' });
+      return;
+    }
+
+    // Existence du post vérifiée AVANT l'INSERT : sinon la clé étrangère
+    // échouerait en 23503 → 500 illisible.
+    const post = await query('SELECT id FROM posts WHERE id=$1', [req.params.id]);
+    if (!post.rows.length) {
+      res.status(404).json({ error: 'المنشور غير موجود.' });
+      return;
+    }
+
+    const inserted = await query(
+      `INSERT INTO post_comments (post_id, author_id, content)
+       VALUES ($1, $2, $3)
+       RETURNING id, created_at`,
+      [req.params.id, req.user!.id, cleanContent],
+    );
+
+    // Réponse auto-suffisante : le client ajoute le commentaire sans re-fetch.
+    res.status(201).json({
+      comment: {
+        id: inserted.rows[0].id,
+        authorId: req.user!.id,
+        author: req.user!.displayName || 'مشجع البرج',
+        avatar: req.user!.avatarUrl || DEFAULT_AVATAR,
+        content: cleanContent,
+        time: new Date(inserted.rows[0].created_at).toLocaleString('ar-DZ'),
+      },
+    });
+  } catch (error) {
+    console.error('[CABBA] comment create:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** DELETE /posts/:id/comments/:commentId — auteur ou admin (modération). */
+communityRouter.delete('/posts/:id/comments/:commentId', requireAuth, async (req, res) => {
+  try {
+    // :commentId n'est pas couvert par app.param('id') : validation explicite,
+    // sinon un identifiant malformé partirait en erreur de cast pg → 500.
+    if (!COMMENT_UUID_RE.test(String(req.params.commentId))) {
+      res.status(400).json({ error: 'Identifiant de commentaire invalide.' });
+      return;
+    }
+
+    const existing = await query(
+      'SELECT author_id FROM post_comments WHERE id=$1 AND post_id=$2',
+      [req.params.commentId, req.params.id],
+    );
+    if (!existing.rows.length) {
+      res.status(404).json({ error: 'التعليق غير موجود.' });
+      return;
+    }
+    if (existing.rows[0].author_id !== req.user!.id && req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'لا يمكنك حذف تعليق شخص آخر.' });
+      return;
+    }
+
+    await query('DELETE FROM post_comments WHERE id=$1', [req.params.commentId]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[CABBA] comment delete:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
