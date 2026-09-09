@@ -16,7 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { Lock, Mail, User as UserIcon } from 'lucide-react';
 
 /** Aligné sur MIN_PASSWORD_LENGTH côté serveur (server/auth.ts). */
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 12;
 
 /** Aligné sur la limite serveur du displayName (100 caractères). */
 const MAX_NAME_LENGTH = 100;

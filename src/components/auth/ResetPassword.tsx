@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Lock, KeyRound, CheckCircle2, Loader2 } from 'lucide-react';
 
 /** Aligné sur MIN_PASSWORD_LENGTH côté serveur (server/auth.ts). */
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 12;
 
 export default function ResetPassword() {
   // Token lu une seule fois : l'URL ne change pas pendant la vie de l'écran.
