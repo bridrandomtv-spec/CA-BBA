@@ -148,7 +148,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       : 'مرحباً بعودتك إلى معقل الجراد الأصفر';
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-zinc-950 animate-in fade-in" dir="rtl">
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-zinc-950 animate-in fade-in overflow-y-auto" dir="rtl">
       <div className="w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl translate-x-10 -translate-y-10"></div>
 
