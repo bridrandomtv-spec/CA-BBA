@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Heart, MessageSquare, Share2, Image as ImageIcon, Send, User, X } from 'lucide-react';
+import { Heart, MessageSquare, Share2, Image as ImageIcon, Send, User, X, MoreVertical, Pencil, Trash2, Loader2 } from 'lucide-react';
 
 interface Post {
   id: string;
@@ -126,6 +126,115 @@ export default function FanCommunity() {
     }
   };
 
+  // ---- Modification / suppression des publications ----
+  // Retour terrain : un supporter devait pouvoir corriger son texte,
+  // changer ou retirer sa photo, et supprimer son post. Auteur uniquement
+  // pour la modification ; auteur OU admin pour la suppression (modération).
+  const [menuPostId, setMenuPostId] = useState<string | null>(null);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editImage, setEditImage] = useState<string | null>(null);
+  const [busyPostId, setBusyPostId] = useState<string | null>(null);
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  const canEdit = (post: Post) => Boolean(currentUser) && post.authorId === currentUser!.id;
+  const canManage = (post: Post) => canEdit(post) || userData?.role === 'admin';
+
+  const startEdit = (post: Post) => {
+    setEditingPostId(post.id);
+    setEditText(post.content);
+    setEditImage(post.imageUrl ?? null);
+  };
+
+  /** Même pipeline que le composer : 800 px max, JPEG 0.6, data URL. */
+  const compressImageFile = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_DIMENSION = 800;
+          if (width > height && width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
+          } else if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
+        };
+        img.onerror = () => reject(new Error('image'));
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('lecture'));
+      reader.readAsDataURL(file);
+    });
+
+  const handleEditImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permettre de resélectionner le même fichier
+    if (!file) return;
+    try {
+      setEditImage(await compressImageFile(file));
+    } catch {
+      setNotice('تعذر قراءة الصورة.');
+    }
+  };
+
+  const handleSaveEdit = async (postId: string) => {
+    if (!editText.trim() && !editImage) {
+      setNotice('المنشور لا يمكن أن يكون فارغاً.');
+      return;
+    }
+    setBusyPostId(postId);
+    try {
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: editText, imageUrl: editImage }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر تعديل المنشور');
+      setPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, ...data.post } : post)));
+      setEditingPostId(null);
+      setNotice('تم تعديل المنشور.');
+    } catch (error) {
+      console.error('[CABBA] édition:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر تعديل المنشور');
+    } finally {
+      setBusyPostId(null);
+    }
+  };
+
+  const handleDelete = async (postId: string) => {
+    if (!window.confirm('حذف المنشور نهائياً؟')) return;
+    setBusyPostId(postId);
+    try {
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.error === 'string' ? data.error : 'تعذر حذف المنشور');
+      }
+      setPosts((prev) => prev.filter((post) => post.id !== postId));
+      setNotice('تم حذف المنشور.');
+    } catch (error) {
+      console.error('[CABBA] suppression:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر حذف المنشور');
+    } finally {
+      setBusyPostId(null);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-zinc-950" dir="rtl">
 
@@ -206,18 +315,98 @@ export default function FanCommunity() {
                           <span className="font-bold text-yellow-500">{post.author.charAt(0)}</span>
                         )}
                       </div>
-                      <div>
+                      
+                    {/* ⋮ — auteur (modifier + supprimer) ou admin (supprimer) */}
+                    {canManage(post) && (
+                      <div className="relative mr-auto">
+                        <button
+                          onClick={() => setMenuPostId(menuPostId === post.id ? null : post.id)}
+                          aria-label="خيارات المنشور"
+                          className="p-2 -m-1 rounded-full text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+                        >
+                          <MoreVertical size={16} />
+                        </button>
+                        {menuPostId === post.id && (
+                          <div className="absolute left-0 top-full mt-1 w-36 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl z-30 overflow-hidden">
+                            {canEdit(post) && (
+                              <button
+                                onClick={() => { startEdit(post); setMenuPostId(null); }}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                              >
+                                <Pencil size={14} /> تعديل
+                              </button>
+                            )}
+                            <button
+                              onClick={() => { setMenuPostId(null); void handleDelete(post.id); }}
+                              disabled={busyPostId === post.id}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                            >
+                              {busyPostId === post.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />} حذف
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}<div>
                         <h4 className="font-bold text-white text-sm">{post.author}</h4>
                         <p className="text-[10px] text-zinc-500">{post.time}</p>
                       </div>
                     </div>
                   </div>
-                  
+                  {editingPostId === post.id ? (
+                    <div className="mb-3">
+                      <textarea
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        rows={3}
+                        maxLength={5000}
+                        aria-label="تعديل النص"
+                        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-yellow-500 resize-none"
+                      />
+                      {editImage && (
+                        <div className="relative mt-2 rounded-xl overflow-hidden border border-zinc-800">
+                          <img src={editImage} alt="معاينة" className="w-full max-h-48 object-cover" />
+                          <button
+                            onClick={() => setEditImage(null)}
+                            aria-label="إزالة الصورة"
+                            className="absolute top-2 right-2 bg-black/60 text-white p-1 rounded-full hover:bg-red-500 transition-colors"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-2">
+                        <input ref={editFileRef} type="file" accept="image/*" className="hidden" onChange={handleEditImage} />
+                        <button
+                          onClick={() => editFileRef.current?.click()}
+                          className="flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-800 hover:text-yellow-500 px-3 py-2 rounded-lg transition-colors"
+                        >
+                          <ImageIcon size={14} /> {editImage ? 'تغيير الصورة' : 'إضافة صورة'}
+                        </button>
+                        <div className="flex-1" />
+                        <button
+                          onClick={() => setEditingPostId(null)}
+                          disabled={busyPostId === post.id}
+                          className="text-xs text-zinc-400 hover:text-white px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          إلغاء
+                        </button>
+                        <button
+                          onClick={() => void handleSaveEdit(post.id)}
+                          disabled={busyPostId === post.id}
+                          className="flex items-center gap-1.5 text-xs font-bold bg-yellow-500 text-black hover:bg-yellow-400 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {busyPostId === post.id && <Loader2 size={12} className="animate-spin" />}
+                          حفظ
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                   <p className="text-zinc-300 text-sm mb-3 leading-relaxed">
                     {post.content}
                   </p>
+                  )}
                   
-                  {post.imageUrl && (
+                  {editingPostId !== post.id && post.imageUrl && (
                     <div className="rounded-xl overflow-hidden mb-3 border border-zinc-800 max-h-64">
                       <img src={post.imageUrl} alt="Post media" className="w-full h-full object-cover" />
                     </div>
