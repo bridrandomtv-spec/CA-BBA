@@ -129,3 +129,69 @@ communityRouter.post('/posts/:id/like', requireAuth, async (req, res) => {
     client.release();
   }
 });
+
+
+// ================= MODIFICATION / SUPPRESSION (retour terrain démo) =================
+// Un supporter doit pouvoir corriger ou retirer sa propre publication —
+// l'écran et le serveur en étaient totalement dépourvus.
+
+/**
+ * PATCH /posts/:id — modification du texte et/ou de l'image.
+ * Réservé à l'AUTEUR : un admin peut modérer (supprimer) mais pas réécrire
+ * les propos d'un supporter. Validations identiques à la création
+ * (5 000 caractères, image data-URL ≤ 500 Ko, contenu non vide), et même
+ * quota anti-spam que la publication.
+ */
+communityRouter.patch('/posts/:id', requireAuth, postRateLimit, async (req, res) => {
+  try {
+    const { content, imageUrl = null } = req.body ?? {};
+    if (typeof content !== 'string' || (typeof imageUrl !== 'string' && imageUrl !== null)) {
+      res.status(400).json({ error: 'Données de publication invalides' }); return;
+    }
+    const cleanContent = content.trim();
+    if (!cleanContent && !imageUrl) { res.status(400).json({ error: 'المنشور لا يمكن أن يكون فارغاً.' }); return; }
+    if (cleanContent.length > 5000) { res.status(400).json({ error: 'المنشور طويل جداً.' }); return; }
+    if (typeof imageUrl === 'string' && imageUrl.length > 500_000) { res.status(400).json({ error: 'الصورة كبيرة جداً.' }); return; }
+
+    const existing = await query('SELECT author_id FROM posts WHERE id=$1', [req.params.id]);
+    if (!existing.rows.length) { res.status(404).json({ error: 'المنشور غير موجود.' }); return; }
+    if (existing.rows[0].author_id !== req.user!.id) {
+      res.status(403).json({ error: 'لا يمكنك تعديل منشور شخص آخر.' }); return;
+    }
+
+    await query('UPDATE posts SET content=$2, image_url=$3 WHERE id=$1', [req.params.id, cleanContent, imageUrl]);
+
+    const hydrated = await query(
+      `SELECT p.*, u.display_name, u.avatar_url,
+        (SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id) AS likes_count,
+        (SELECT COUNT(*) FROM post_comments c WHERE c.post_id=p.id) AS comments_count,
+        EXISTS(SELECT 1 FROM post_likes l2 WHERE l2.post_id=p.id AND l2.user_id=$1) AS is_liked
+       FROM posts p JOIN users u ON u.id=p.author_id WHERE p.id=$2`,
+      [req.user!.id, req.params.id],
+    );
+    res.json({ post: mapPost(hydrated.rows[0]) });
+  } catch (error) {
+    console.error('[CABBA] update post:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /posts/:id — suppression par l'AUTEUR ou par un ADMIN (modération
+ * d'un contenu signalé). Likes et commentaires partent en cascade
+ * (ON DELETE CASCADE, migration 004) : aucun orphelin.
+ */
+communityRouter.delete('/posts/:id', requireAuth, async (req, res) => {
+  try {
+    const existing = await query('SELECT author_id FROM posts WHERE id=$1', [req.params.id]);
+    if (!existing.rows.length) { res.status(404).json({ error: 'المنشور غير موجود.' }); return; }
+    if (existing.rows[0].author_id !== req.user!.id && req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'لا يمكنك حذف منشور شخص آخر.' }); return;
+    }
+    await query('DELETE FROM posts WHERE id=$1', [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[CABBA] delete post:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
