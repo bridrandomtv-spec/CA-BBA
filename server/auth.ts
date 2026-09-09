@@ -26,11 +26,12 @@
  */
 
 import { Router, Request, Response, NextFunction, RequestHandler } from 'express';
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query, withTransaction } from './db/index.js';
 import { env } from './env.js';
-import { sendWelcomeEmail } from './email.js';
+import { sendWelcomeEmail, sendEmail, passwordResetEmail } from './email.js';
 import { isPasswordCompromised } from './passwords.js';
 
 export const authRouter = Router();
@@ -132,6 +133,17 @@ const clearSessionCookie = (res: Response) => {
     sameSite: 'lax',
   });
 };
+
+/** Durée de validité du lien de réinitialisation envoyé par email. */
+const RESET_TOKEN_TTL_MINUTES = 30;
+
+/**
+ * Le jeton de réinitialisation (256 bits aléatoires) n'est JAMAIS stocké en
+ * clair : seule son empreinte SHA-256 va en base (migration 017). Un vol de
+ * la base ne révèle donc aucun lien utilisable.
+ */
+const hashResetToken = (token: string): string =>
+  crypto.createHash('sha256').update(token).digest('hex');
 
 /**
  * Vérifie le cookie de session et charge l'utilisateur depuis la base.
@@ -520,6 +532,145 @@ authRouter.delete('/account', requireAuth, async (req: Request, res: Response): 
     res.json({ success: true });
   } catch (error) {
     console.error('Account deletion error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+/**
+ * POST /api/auth/forgot-password — demande de lien de réinitialisation.
+ *
+ * Réponse volontairement GÉNÉRIQUE et identique dans tous les cas (compte
+ * existant ou non, erreur interne) : la route ne doit jamais révéler quelles
+ * adresses sont inscrites. Le rate limit authRateLimit (20/15 min) est monté
+ * côté server.ts — sans lui, la route deviendrait un outil de bombardement
+ * d'emails.
+ */
+authRouter.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  const generic = { success: true };
+  try {
+    const { email } = req.body ?? {};
+    if (typeof email !== 'string' || !email.trim()) {
+      res.json(generic);
+      return;
+    }
+    const normalizedEmail = normalizeEmail(email);
+
+    const result = await query<UserRow>(
+      `SELECT ${USER_COLUMNS} FROM users WHERE email = $1 AND deleted_at IS NULL`,
+      [normalizedEmail],
+    );
+    const row = result.rows[0];
+    if (!row) {
+      res.json(generic);
+      return;
+    }
+
+    // Une nouvelle demande invalide les liens précédents encore valides :
+    // seul le dernier email reçu fonctionne — limite la fenêtre d'un lien égaré.
+    await query(
+      `UPDATE password_reset_tokens SET used_at = NOW()
+       WHERE user_id = $1 AND used_at IS NULL`,
+      [row.id],
+    );
+
+    const token = crypto.randomBytes(32).toString('hex');
+    await query(
+      `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, NOW() + ($3 || ' minutes')::interval)`,
+      [row.id, hashResetToken(token), String(RESET_TOKEN_TTL_MINUTES)],
+    );
+
+    // Envoi asynchrone et best-effort : comme le bienvenu, une panne du
+    // fournisseur email ne doit pas trahir l'existence du compte via un 500.
+    const base = (env.appBaseUrl ?? '').replace(/\/$/, '');
+    const resetUrl = `${base}/reset-password?token=${token}`;
+    const content = passwordResetEmail(row.display_name, resetUrl);
+    void sendEmail({
+      userId: row.id,
+      to: row.email,
+      subject: content.subject,
+      html: content.html,
+      kind: 'password_reset',
+      // event_key unique par demande : la déduplication Resend n'écrase pas
+      // un lien précédent encore valide côté boîte mail.
+      eventKey: `password-reset:${row.id}:${hashResetToken(token).slice(0, 16)}`,
+    }).catch((error) => {
+      console.error('[CABBA] password reset email:', error?.message ?? error);
+    });
+
+    res.json(generic);
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    // Même en cas d'erreur interne : réponse générique, jamais d'indice.
+    res.json(generic);
+  }
+});
+
+/**
+ * POST /api/auth/reset-password — consommation du lien reçu par email.
+ * Chaîne de vérifications : jeton haché présent, non utilisé, non expiré →
+ * longueur minimale → HIBP → changement en transaction avec révocation de
+ * TOUTES les sessions (token_version) : un cookie volé ne survit pas au reset.
+ */
+authRouter.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { token, password } = req.body ?? {};
+    if (typeof token !== 'string' || !token || typeof password !== 'string') {
+      res.status(400).json({ error: 'الرابط أو كلمة المرور غير صالحة.' });
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      res.status(400).json({
+        error: `كلمة المرور يجب أن تحتوي على ${MIN_PASSWORD_LENGTH} أحرف على الأقل.`,
+      });
+      return;
+    }
+
+    // Une réinitialisation n'est pas une raison pour accepter un mot de
+    // passe compromis (même politique qu'à l'inscription, fail-open).
+    const compromised = await isPasswordCompromised(password);
+    if (compromised === true) {
+      res.status(400).json({
+        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة. يرجى اختيار كلمة مرور أخرى.',
+      });
+      return;
+    }
+
+    const tokenResult = await query<{ id: string; user_id: string }>(
+      `SELECT id, user_id FROM password_reset_tokens
+       WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()`,
+      [hashResetToken(token)],
+    );
+    const resetRow = tokenResult.rows[0];
+    if (!resetRow) {
+      res.status(400).json({ error: 'الرابط غير صالح أو منتهي الصلاحية. اطلب رابطاً جديداً.' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    // Transaction : mot de passe changé + jeton consommé + sessions révoquées.
+    const updated = await withTransaction(async (exec) => {
+      await exec('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [resetRow.id]);
+      return exec(
+        `UPDATE users
+         SET password_hash = $1, token_version = token_version + 1, updated_at = NOW()
+         WHERE id = $2 AND deleted_at IS NULL`,
+        [passwordHash, resetRow.user_id],
+      );
+    });
+
+    if ((updated.rowCount ?? 0) === 0) {
+      // Compte anonymisé (RGPD) entre l'émission du lien et son usage.
+      res.status(400).json({ error: 'الحساب غير متاح.' });
+      return;
+    }
+
+    clearSessionCookie(res);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
