@@ -315,7 +315,12 @@ export default function FanCommunity() {
                           <span className="font-bold text-yellow-500">{post.author.charAt(0)}</span>
                         )}
                       </div>
-                      
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{post.author}</h4>
+                        <p className="text-[10px] text-zinc-500">{post.time}</p>
+                      </div>
+                    </div>
+
                     {/* ⋮ — auteur (modifier + supprimer) ou admin (supprimer) */}
                     {canManage(post) && (
                       <div className="relative mr-auto">
@@ -346,12 +351,7 @@ export default function FanCommunity() {
                           </div>
                         )}
                       </div>
-                    )}<div>
-                        <h4 className="font-bold text-white text-sm">{post.author}</h4>
-                        <p className="text-[10px] text-zinc-500">{post.time}</p>
-                      </div>
-                    </div>
-                  </div>
+                    )}                  </div>
                   {editingPostId === post.id ? (
                     <div className="mb-3">
                       <textarea
