@@ -74,6 +74,10 @@ app.use(cookieParser());
 app.use('/api', apiRateLimit);
 app.use('/api/auth/login', authRateLimit);
 app.use('/api/auth/register', authRateLimit);
+// La récupération de mot de passe est un vecteur classique de bombardement
+// d'emails et d'énumération de comptes : même quota que login/register.
+app.use('/api/auth/forgot-password', authRateLimit);
+app.use('/api/auth/reset-password', authRateLimit);
 app.use('/api/auth', authRouter);
 
 app.use("/api/news", newsRouter);
