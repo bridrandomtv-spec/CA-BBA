@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
+import ResetPassword from './components/auth/ResetPassword';
 import { trackPageView } from './lib/analytics';
 // Seul le nommé est importé : la limite globale vit dans main.tsx, et un
 // import par défaut inutilisé casserait `noUnusedLocals` (tsconfig strict).
@@ -76,6 +77,12 @@ function ScreenFallback() {
 
 export default function App() {
   const { currentUser, loading: authLoading, userData, refreshUser } = useAuth();
+
+  // Route de réinitialisation du mot de passe (lien reçu par email) :
+  // rendue HORS du flux d'authentification — un supporter bloqué dehors n'a
+  // pas de session. Lue une seule fois : l'URL ne change pas pendant la vie
+  // d'App (le retour post-reset passe par window.location.assign('/')).
+  const [isResetRoute] = useState(() => window.location.pathname.startsWith('/reset-password'));
 
   // Priorité au lien profond : `#/store` partagé bat la session précédente.
   const [activeTab, setActiveTab] = useState<Tab>(() => {
@@ -147,6 +154,10 @@ export default function App() {
       default: return <Home onNavigate={setActiveTab} />;
     }
   };
+
+  if (isResetRoute) {
+    return <ResetPassword />;
+  }
 
   if (authLoading) {
     return (
