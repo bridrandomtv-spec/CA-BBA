@@ -48,7 +48,7 @@ const SESSION_MAX_AGE_MS = SESSION_DAYS * 24 * 60 * 60 * 1000;
 export const BCRYPT_ROUNDS = 12;
 
 /** Longueur minimale d'un mot de passe à l'inscription. */
-export const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 12;
 
 /** Rôles acceptés, alignés sur la contrainte CHECK de la table users. */
 export const ROLES = ['user', 'admin'] as const;
@@ -237,7 +237,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     const { email, password, displayName } = req.body ?? {};
 
     if (typeof email !== 'string' || typeof password !== 'string' || typeof displayName !== 'string') {
-      res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: 'الحقول المطلوبة ناقصة.' });
       return;
     }
 
@@ -245,7 +245,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     const trimmedName = displayName.trim();
 
     if (!normalizedEmail || !trimmedName || !password) {
-      res.status(400).json({ error: 'Missing required fields' });
+      res.status(400).json({ error: 'الحقول المطلوبة ناقصة.' });
       return;
     }
 
@@ -268,7 +268,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     const compromised = await isPasswordCompromised(password);
     if (compromised === true) {
       res.status(400).json({
-        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة. يرجى اختيار كلمة مرور أخرى.',
+        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة ويسهل تخمينها. اختر كلمة مرور مختلفة: 12 حرفاً على الأقل، مزيج من أحرف وأرقام ورموز.',
       });
       return;
     }
@@ -280,7 +280,7 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
 
     const existingUser = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
     if (existingUser.rows.length > 0) {
-      res.status(409).json({ error: 'Email already in use' });
+      res.status(409).json({ error: 'البريد الإلكتروني مستعمل بالفعل.' });
       return;
     }
 
@@ -317,7 +317,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     const { email, password } = req.body ?? {};
 
     if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
-      res.status(400).json({ error: 'Missing credentials' });
+      res.status(400).json({ error: 'أدخل البريد الإلكتروني وكلمة المرور.' });
       return;
     }
 
@@ -334,7 +334,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     const isMatch = await bcrypt.compare(password, hash);
 
     if (!row || !isMatch) {
-      res.status(401).json({ error: 'Invalid credentials' });
+      res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
       return;
     }
 
@@ -632,7 +632,7 @@ authRouter.post('/reset-password', async (req: Request, res: Response): Promise<
     const compromised = await isPasswordCompromised(password);
     if (compromised === true) {
       res.status(400).json({
-        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة. يرجى اختيار كلمة مرور أخرى.',
+        error: 'كلمة المرور هذه ظهرت في تسريبات بيانات سابقة ويسهل تخمينها. اختر كلمة مرور مختلفة: 12 حرفاً على الأقل، مزيج من أحرف وأرقام ورموز.',
       });
       return;
     }
