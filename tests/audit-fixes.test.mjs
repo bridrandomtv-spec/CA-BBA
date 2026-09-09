@@ -127,7 +127,7 @@ test('auth UI — Login durci, AuthContext logout toujours nettoyant', () => {
   assert.match(login, /autoComplete="name"/);
   assert.match(login, /\.json\(\)\.catch\(/);
   assert.match(login, /instanceof TypeError/);
-  assert.match(login, /MIN_PASSWORD_LENGTH = 8/);
+  assert.match(login, /MIN_PASSWORD_LENGTH = 12/);
   assert.match(login, /setPassword\(''\)/);
   assert.match(read('src/contexts/AuthContext.tsx'), /console\.error\('\[CABBA\] logout/);
 });
