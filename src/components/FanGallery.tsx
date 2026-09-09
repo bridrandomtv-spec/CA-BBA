@@ -29,6 +29,40 @@ interface GalleryPost {
   createdAt: string;
 }
 
+/**
+ * Repli sans R2 : compresse l'image en data-URL (800 px max, JPEG 0.6) —
+ * exactement le pipeline de la communauté. Le serveur borne à 500 Ko.
+ */
+function compressToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_DIMENSION = 800;
+        if (width > height && width > MAX_DIMENSION) {
+          height *= MAX_DIMENSION / width;
+          width = MAX_DIMENSION;
+        } else if (height > MAX_DIMENSION) {
+          width *= MAX_DIMENSION / height;
+          height = MAX_DIMENSION;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function FanGallery() {
   const { currentUser: user, userData } = useAuth();
   // null = chargement en cours ; [] = synchronisé et vide.
@@ -66,13 +100,29 @@ export default function FanGallery() {
 
     setUploading(true);
     try {
-      // Flux R2 complet : presign → PUT direct → complete → publication.
-      const media = await uploadMedia(file, 'fan-gallery');
+      // Voie normale : flux R2 (presign → PUT → complete). Si le stockage
+      // R2 n'est pas configuré (démo, installation minimale), repli
+      // AUTOMATIQUE en data-URL compressée — la galerie reste utilisable
+      // au lieu d'afficher « Media storage is not configured ».
+      let payload: Record<string, unknown>;
+      try {
+        const media = await uploadMedia(file, 'fan-gallery');
+        payload = { mediaId: media.id };
+      } catch (uploadError) {
+        const message = uploadError instanceof Error ? uploadError.message : '';
+        if (!message.includes('Media storage is not configured')) throw uploadError;
+        const dataUrl = await compressToDataUrl(file);
+        if (dataUrl.length > 500_000) {
+          throw new Error('الصورة كبيرة جداً حتى بعد الضغط. اختر صورة أصغر.');
+        }
+        payload = { imageData: dataUrl };
+      }
+
       const res = await fetch('/api/gallery/posts', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mediaId: media.id }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'فشل نشر الصورة');
