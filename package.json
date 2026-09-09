@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "tidy": "node scripts/tidy-root.mjs",
     "test": "node --test",
-    "test:db": "node --import tsx --test tests/db/auth-register.mts tests/db/auth-logout.mts tests/db/auth-gdpr.mts",
+    "test:db": "node --import tsx --test tests/db/auth-register.mts tests/db/auth-logout.mts tests/db/auth-gdpr.mts tests/db/auth-reset.mts",
     "migrate": "tsx server/db/migrate.ts",
     "football:verify": "tsx scripts/verify-football.mts",
     "football:sync": "tsx scripts/sync-football.mts",
