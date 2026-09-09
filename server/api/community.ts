@@ -292,7 +292,7 @@ communityRouter.delete('/posts/:id/comments/:commentId', requireAuth, async (req
   try {
     // :commentId n'est pas couvert par app.param('id') : validation explicite,
     // sinon un identifiant malformé partirait en erreur de cast pg → 500.
-    if (!COMMENT_UUID_RE.test(req.params.commentId)) {
+    if (!COMMENT_UUID_RE.test(String(req.params.commentId))) {
       res.status(400).json({ error: 'Identifiant de commentaire invalide.' });
       return;
     }
