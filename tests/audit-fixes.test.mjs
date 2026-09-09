@@ -539,3 +539,49 @@ test('ops — vérification post-release et checklist de production présentes',
   assert.ok(exists('tests/db/auth-logout.mts'));
   assert.ok(exists('tests/db/auth-gdpr.mts'));
 });
+
+
+test('récupération de mot de passe — jeton haché, usage unique, sessions révoquées', () => {
+  assert.ok(migrations().some((f) => f.includes('password_reset')), 'migration 017 requise');
+
+  const auth = read('server/auth.ts');
+  assert.match(auth, /authRouter\.post\('\/forgot-password'/);
+  assert.match(auth, /authRouter\.post\('\/reset-password'/);
+  // Le jeton ne doit JAMAIS être stocké en clair.
+  assert.match(auth, /createHash\('sha256'\)/);
+  assert.match(auth, /randomBytes\(32\)/);
+  assert.match(auth, /RESET_TOKEN_TTL_MINUTES = 30/);
+  assert.match(auth, /used_at IS NULL AND expires_at > NOW\(\)/);
+  // Réponse générique : la route ne révèle pas si l'adresse est inscrite.
+  assert.match(auth, /const generic = \{ success: true \};/);
+  // Le reset révoque toutes les sessions (cookie volé ne survit pas).
+  assert.match(auth, /token_version = token_version \+ 1/);
+  // HIBP s'applique aussi au nouveau mot de passe.
+  assert.match(auth, /isPasswordCompromised/);
+
+  const email = read('server/email.ts');
+  assert.match(email, /passwordResetEmail/);
+  assert.match(email, /'password_reset'/);
+
+  const server = read('server.ts');
+  assert.match(server, /app\.use\('\/api\/auth\/forgot-password', authRateLimit\)/);
+  assert.match(server, /app\.use\('\/api\/auth\/reset-password', authRateLimit\)/);
+
+  const login = read('src/components/auth/Login.tsx');
+  assert.match(login, /نسيت كلمة المرور/);
+  assert.match(login, /forgot-password/);
+  assert.match(login, /enterForgotMode/);
+
+  const app = read('src/App.tsx');
+  assert.match(app, /isResetRoute/);
+  assert.match(app, /<ResetPassword \/>/);
+
+  assert.ok(exists('src/components/auth/ResetPassword.tsx'));
+  const reset = read('src/components/auth/ResetPassword.tsx');
+  assert.match(reset, /\/api\/auth\/reset-password/);
+  assert.match(reset, /MIN_PASSWORD_LENGTH/);
+
+  const pkg = JSON.parse(read('package.json'));
+  assert.match(pkg.scripts['test:db'], /auth-reset\.mts/);
+  assert.ok(exists('tests/db/auth-reset.mts'));
+});
