@@ -1,7 +1,7 @@
 import { query } from './db/index.js';
 import { env } from './env.js';
 
-export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'order' | 'system';
+export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'order' | 'password_reset' | 'system';
 
 export interface SendEmailInput {
   userId?: string;
@@ -99,6 +99,15 @@ export function orderStatusEmail(status: string, orderId: string) {
       `</p>` +
       `<p><a href="${escapeHtml(env.appBaseUrl)}/#/store" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">فتح متجر CABBA</a></p>`,
     ),
+  };
+}
+
+export function passwordResetEmail(displayName: string, resetUrl: string) {
+  const safeName = escapeHtml(displayName);
+  const safeUrl = escapeHtml(resetUrl);
+  return {
+    subject: 'استعادة كلمة المرور — منصة أنصار CABBA',
+    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px"><div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px"><h1>استعادة كلمة المرور 🔑</h1><p>مرحباً ${safeName}،</p><p>وصلنا طلب لاستعادة كلمة المرور الخاصة بحسابك في منصة أنصار الكابا. اضغط على الزر التالي لاختيار كلمة مرور جديدة:</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">إعادة تعيين كلمة المرور</a></p><p style="color:#71717a;font-size:12px">الرابط صالح لمدة 30 دقيقة ولا يمكن استعماله إلا مرة واحدة.</p><p style="color:#71717a;font-size:12px">إن لم تطلب ذلك، تجاهل هذه الرسالة — حسابك يبقى آمناً.</p><p style="color:#a1a1aa;font-size:11px;word-break:break-all" dir="ltr">${safeUrl}</p></div></body></html>`,
   };
 }
 
