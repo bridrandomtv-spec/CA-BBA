@@ -15,6 +15,15 @@ interface Post {
   isLiked: boolean;
 }
 
+interface PostComment {
+  id: string;
+  authorId: string;
+  author: string;
+  avatar: string;
+  content: string;
+  time: string;
+}
+
 export default function FanCommunity() {
   const { currentUser, userData } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -137,6 +146,14 @@ export default function FanCommunity() {
   const [busyPostId, setBusyPostId] = useState<string | null>(null);
   const editFileRef = useRef<HTMLInputElement>(null);
 
+  // ---- Commentaires : le bouton 💬 était décoratif (aucune route, aucune
+  // UI). Section dépliable sous la carte, un post ouvert à la fois.
+  const [openCommentsId, setOpenCommentsId] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, PostComment[]>>({});
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
+
   const canEdit = (post: Post) => Boolean(currentUser) && post.authorId === currentUser!.id;
   const canManage = (post: Post) => canEdit(post) || userData?.role === 'admin';
 
@@ -232,6 +249,71 @@ export default function FanCommunity() {
       setNotice(error instanceof Error ? error.message : 'تعذر حذف المنشور');
     } finally {
       setBusyPostId(null);
+    }
+  };
+
+  const toggleComments = async (postId: string) => {
+    if (openCommentsId === postId) {
+      setOpenCommentsId(null);
+      return;
+    }
+    setOpenCommentsId(postId);
+    setCommentText('');
+    if (commentsByPost[postId]) return; // déjà chargés pour cette session
+    setCommentsLoading(true);
+    try {
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/comments`, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error(`comments → ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      setCommentsByPost((prev) => ({ ...prev, [postId]: Array.isArray(data?.comments) ? data.comments : [] }));
+    } catch (error) {
+      console.error('[CABBA] commentaires:', error);
+      setNotice('تعذر تحميل التعليقات.');
+      setCommentsByPost((prev) => ({ ...prev, [postId]: [] }));
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const handleAddComment = async (postId: string) => {
+    const text = commentText.trim();
+    if (!text || sendingComment) return;
+    setSendingComment(true);
+    try {
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/comments`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر إضافة التعليق');
+      setCommentsByPost((prev) => ({ ...prev, [postId]: [...(prev[postId] ?? []), data.comment] }));
+      setPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, comments: post.comments + 1 } : post)));
+      setCommentText('');
+    } catch (error) {
+      console.error('[CABBA] commentaire:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر إضافة التعليق');
+    } finally {
+      setSendingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (postId: string, commentId: string) => {
+    try {
+      const res = await fetch(`/api/community/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.error === 'string' ? data.error : 'تعذر حذف التعليق');
+      }
+      setCommentsByPost((prev) => ({ ...prev, [postId]: (prev[postId] ?? []).filter((comment) => comment.id !== commentId) }));
+      setPosts((prev) => prev.map((post) => (post.id === postId ? { ...post, comments: Math.max(0, post.comments - 1) } : post)));
+    } catch (error) {
+      console.error('[CABBA] suppression commentaire:', error);
+      setNotice(error instanceof Error ? error.message : 'تعذر حذف التعليق');
     }
   };
 
@@ -420,11 +502,83 @@ export default function FanCommunity() {
                       <Heart size={16} className={post.isLiked ? 'fill-current' : ''} />
                       <span>{post.likes}</span>
                     </button>
-                    <button className="flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-white transition-colors">
+                    <button
+                      onClick={() => void toggleComments(post.id)}
+                      aria-expanded={openCommentsId === post.id}
+                      className={`flex items-center gap-1.5 text-xs font-bold transition-colors ${
+                        openCommentsId === post.id ? 'text-yellow-500' : 'text-zinc-500 hover:text-white'
+                      }`}
+                    >
                       <MessageSquare size={16} />
                       <span>{post.comments}</span>
                     </button>
                   </div>
+                  {openCommentsId === post.id && (
+                    <div className="mt-3 pt-3 border-t border-zinc-800/50 space-y-3">
+                      {commentsLoading ? (
+                        <div className="flex justify-center py-3">
+                          <Loader2 size={16} className="animate-spin text-zinc-500" />
+                        </div>
+                      ) : (commentsByPost[post.id] ?? []).length === 0 ? (
+                        <p className="text-[11px] text-zinc-600 text-center py-1">لا توجد تعليقات بعد — كن أول المعلقين!</p>
+                      ) : (
+                        (commentsByPost[post.id] ?? []).map((comment) => (
+                          <div key={comment.id} className="flex items-start gap-2">
+                            <div className="w-7 h-7 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden flex-shrink-0 mt-0.5">
+                              {comment.avatar ? (
+                                <img src={comment.avatar} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-[10px] font-bold text-yellow-500">{comment.author.charAt(0)}</span>
+                              )}
+                            </div>
+                            <div className="flex-1 bg-zinc-800/40 rounded-xl px-3 py-2 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-bold text-white truncate">{comment.author}</span>
+                                <span className="text-[9px] text-zinc-600 shrink-0">{comment.time}</span>
+                              </div>
+                              <p className="text-xs text-zinc-300 leading-relaxed break-words">{comment.content}</p>
+                            </div>
+                            {(comment.authorId === currentUser?.id || userData?.role === 'admin') && (
+                              <button
+                                onClick={() => void handleDeleteComment(post.id, comment.id)}
+                                aria-label="حذف التعليق"
+                                className="text-zinc-600 hover:text-red-400 transition-colors p-1 mt-0.5 flex-shrink-0"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+
+                      {/* Saisie du commentaire */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="text"
+                          value={commentText}
+                          onChange={(e) => setCommentText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                              e.preventDefault();
+                              void handleAddComment(post.id);
+                            }
+                          }}
+                          maxLength={2000}
+                          placeholder="اكتب تعليقاً..."
+                          aria-label="اكتب تعليقاً"
+                          className="flex-1 min-w-0 bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-yellow-500"
+                        />
+                        <button
+                          onClick={() => void handleAddComment(post.id)}
+                          disabled={!commentText.trim() || sendingComment}
+                          aria-label="إرسال التعليق"
+                          className="bg-zinc-800 text-zinc-300 hover:bg-yellow-500 hover:text-black p-2.5 rounded-xl transition-colors flex-shrink-0 disabled:opacity-40"
+                        >
+                          {sendingComment ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
