@@ -29,7 +29,8 @@ const mapPost = (row: any) => ({
   authorId: row.owner_id,
   author: row.display_name || 'مشجع',
   avatar: (row.display_name || 'م').slice(0, 1),
-  imageUrl: publicMediaUrl(row.object_key),
+  // R2 si présent, sinon la data-URL compressée (repli migration 018).
+  imageUrl: row.object_key ? publicMediaUrl(row.object_key) : ((row.image_data as string | null) ?? null),
   caption: row.caption,
   likes: Number(row.likes_count),
   isLiked: Boolean(row.is_liked),
@@ -37,12 +38,12 @@ const mapPost = (row: any) => ({
 });
 
 const SELECT_POST = `
-  SELECT g.id, g.owner_id, g.caption, g.created_at,
+  SELECT g.id, g.owner_id, g.caption, g.created_at, g.image_data,
          m.object_key, u.display_name,
          (SELECT COUNT(*) FROM fan_gallery_likes l WHERE l.post_id=g.id) AS likes_count,
          EXISTS(SELECT 1 FROM fan_gallery_likes l2 WHERE l2.post_id=g.id AND l2.user_id=$1) AS is_liked
   FROM fan_gallery_posts g
-  JOIN media_assets m ON m.id = g.media_id AND m.status = 'uploaded'
+  LEFT JOIN media_assets m ON m.id = g.media_id AND m.status = 'uploaded'
   JOIN users u ON u.id = g.owner_id`;
 
 galleryRouter.get('/posts', requireAuth, async (req: Request, res: Response): Promise<void> => {
@@ -61,37 +62,62 @@ galleryRouter.get('/posts', requireAuth, async (req: Request, res: Response): Pr
 
 galleryRouter.post('/posts', requireAuth, postRateLimit, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { mediaId, caption } = req.body ?? {};
-    if (typeof mediaId !== 'string' || !UUID_RE.test(mediaId)) {
-      res.status(400).json({ error: 'mediaId invalide.' });
-      return;
-    }
+    const { mediaId, imageData, caption } = req.body ?? {};
     const cleanCaption = optionalString(caption, 'caption', 500) ?? 'من عدسة الجماهير 🟡⚫';
 
-    // Propriété + état du média vérifiés en base : on ne publie que ce que le
-    // compte a réellement terminé d'uploader, et que des images.
-    const media = await query(
-      `SELECT id FROM media_assets WHERE id=$1 AND owner_id=$2 AND status='uploaded' AND kind='image'`,
-      [mediaId, req.user!.id],
-    );
-    if (!media.rows.length) {
-      res.status(404).json({ error: 'الوسائط غير موجودة أو غير مكتملة الرفع.' });
+    let insertedId: string;
+
+    if (typeof mediaId === 'string' && mediaId) {
+      // Voie R2 : presign → PUT → complete déjà effectués côté client.
+      if (!UUID_RE.test(mediaId)) {
+        res.status(400).json({ error: 'mediaId invalide.' });
+        return;
+      }
+      // Propriété + état du média vérifiés en base : on ne publie que ce que
+      // le compte a réellement terminé d'uploader, et que des images.
+      const media = await query(
+        `SELECT id FROM media_assets WHERE id=$1 AND owner_id=$2 AND status='uploaded' AND kind='image'`,
+        [mediaId, req.user!.id],
+      );
+      if (!media.rows.length) {
+        res.status(404).json({ error: 'الوسائط غير موجودة أو غير مكتملة الرفع.' });
+        return;
+      }
+      const inserted = await query(
+        `INSERT INTO fan_gallery_posts (media_id, owner_id, caption)
+         VALUES ($1,$2,$3)
+         ON CONFLICT (media_id) DO NOTHING
+         RETURNING id`,
+        [mediaId, req.user!.id, cleanCaption],
+      );
+      if (!inserted.rows.length) {
+        res.status(409).json({ error: 'هذه الصورة منشورة بالفعل.' });
+        return;
+      }
+      insertedId = inserted.rows[0].id;
+    } else if (typeof imageData === 'string' && imageData) {
+      // Repli sans R2 (démo / installation minimale) : data-URL compressée
+      // côté client — même plafond que les publications de la communauté.
+      if (!/^data:image\/(jpeg|jpg|png|webp|gif);base64,/.test(imageData)) {
+        res.status(400).json({ error: 'صيغة الصورة غير صالحة.' });
+        return;
+      }
+      if (imageData.length > 500_000) {
+        res.status(400).json({ error: 'الصورة كبيرة جداً. اختر صورة أصغر.' });
+        return;
+      }
+      const inserted = await query(
+        `INSERT INTO fan_gallery_posts (owner_id, caption, image_data)
+         VALUES ($1,$2,$3) RETURNING id`,
+        [req.user!.id, cleanCaption, imageData],
+      );
+      insertedId = inserted.rows[0].id;
+    } else {
+      res.status(400).json({ error: 'mediaId ou imageData requis.' });
       return;
     }
 
-    const inserted = await query(
-      `INSERT INTO fan_gallery_posts (media_id, owner_id, caption)
-       VALUES ($1,$2,$3)
-       ON CONFLICT (media_id) DO NOTHING
-       RETURNING id`,
-      [mediaId, req.user!.id, cleanCaption],
-    );
-    if (!inserted.rows.length) {
-      res.status(409).json({ error: 'هذه الصورة منشورة بالفعل.' });
-      return;
-    }
-
-    const post = await query(`${SELECT_POST} WHERE g.id = $2`, [req.user!.id, inserted.rows[0].id]);
+    const post = await query(`${SELECT_POST} WHERE g.id = $2`, [req.user!.id, insertedId]);
     res.status(201).json({ post: mapPost(post.rows[0]) });
   } catch (error) {
     if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
@@ -139,8 +165,8 @@ galleryRouter.post('/posts/:id/like', requireAuth, async (req: Request, res: Res
 galleryRouter.delete('/posts/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await query(
-      `SELECT g.id, g.owner_id, m.id AS media_id, m.object_key
-       FROM fan_gallery_posts g JOIN media_assets m ON m.id = g.media_id
+      `SELECT g.id, g.owner_id, g.media_id, m.object_key
+       FROM fan_gallery_posts g LEFT JOIN media_assets m ON m.id = g.media_id
        WHERE g.id = $1`,
       [req.params.id],
     );
@@ -151,13 +177,19 @@ galleryRouter.delete('/posts/:id', requireAuth, async (req: Request, res: Respon
       return;
     }
 
-    // Best-effort sur R2 : l'objet peut avoir déjà disparu. La ligne
-    // media_assets est ensuite supprimée, ce qui entraîne la publication
-    // (ON DELETE CASCADE) — plus aucun objet orphelin référencé.
-    await deleteMedia(row.object_key).catch((error) => {
-      console.warn('[CABBA] gallery delete R2 (ignoré) :', error instanceof Error ? error.message : error);
-    });
-    await query('DELETE FROM media_assets WHERE id=$1', [row.media_id]);
+    // Publication R2 : best-effort sur l'objet distant (il a pu être purgé),
+    // puis la ligne média — la publication suit en cascade. Publication
+    // data-URL : aucun objet distant, suppression directe de la ligne.
+    if (row.object_key) {
+      await deleteMedia(row.object_key).catch((error) => {
+        console.warn('[CABBA] gallery delete R2 (ignoré) :', error instanceof Error ? error.message : error);
+      });
+    }
+    if (row.media_id) {
+      await query('DELETE FROM media_assets WHERE id=$1', [row.media_id]);
+    }
+    // Couvre le repli data-URL ; no-op si la cascade R2 a déjà supprimé la ligne.
+    await query('DELETE FROM fan_gallery_posts WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (error) {
     if (error instanceof Error && error.message === 'R2_NOT_CONFIGURED') {
