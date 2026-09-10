@@ -585,3 +585,20 @@ test('récupération de mot de passe — jeton haché, usage unique, sessions r�
   assert.match(pkg.scripts['test:db'], /auth-reset\.mts/);
   assert.ok(exists('tests/db/auth-reset.mts'));
 });
+
+test('صندوق دعم النادي — campagne réelle administrable (bloc mort supprimé)', () => {
+  assert.ok(migrations().some((f) => f.includes('support_campaigns')));
+  const support = read('server/api/support.ts');
+  assert.match(support, /support_campaigns/);
+  assert.match(support, /support_donations/);
+  assert.match(support, /requireAdmin/);
+  assert.match(support, /COALESCE\(SUM\(amount_dzd\)/, 'le collecté est la somme du registre, jamais saisi à la main');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/support", supportRouter\)/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /\/api\/support\/campaign/);
+  assert.doesNotMatch(home, /البيانات غير متوفرة حالياً/, 'le placeholder mort a disparu de l\'accueil');
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /إدارة صندوق الدعم/);
+  assert.ok(exists('src/components/admin/AdminSupport.tsx'));
+});
