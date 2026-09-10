@@ -1,7 +1,8 @@
 -- Contenu de démonstration CABBA (actualités, boutique, صندوق دعم النادي).
 -- À exécuter dans pgAdmin (Query Tool -> File -> Open) ou Neon SQL Editor.
--- Schéma réel vérifié sur les migrations : news(title, content, image_url),
--- products(name, description, price, image_url, category, stock, active).
+-- Schéma réel vérifié sur les migrations :
+--   news(title, content, image_url, date VARCHAR(20) NOT NULL)
+--   products(name, description, price, image_url, category, stock, active)
 -- Idempotent : ne fait rien si du contenu existe déjà.
 
 DO $$
@@ -16,16 +17,16 @@ BEGIN
 
   SELECT id INTO uid FROM users WHERE email = 'brid.randomtv@gmail.com';
 
-  INSERT INTO news (title, content, image_url) VALUES
+  INSERT INTO news (title, content, image_url, date) VALUES
    ('افتتاح المتجر الرسمي للأنصار',
     'يسعد إدارة نادي شباب أهلي برج بوعريريج أن تعلن عن افتتاح المتجر الرسمي للأنصار: أوشحة، قمصان ومنتجات تخلد ألوان الجراد الأصفر. الأسعار في متناول الجميع والعائدات تدعم خزينة النادي.',
-    ''),
+    '', '2026-09-10'),
    ('برنامج تحضيرات الفريق الأول',
     'يواصل الفريق الأول تحضيراته للموسم المقبل بحصص يومية بملعب 20 أوت. الدعوة مفتوحة للأنصار لحضور الحصص المسائية ومساندة اللاعبين.',
-    ''),
+    '', '2026-09-09'),
    ('حملة الانخراطات للموسم الجديد',
     'انطلقت حملة الانخراطات للموسم الجديد: بطاقة العضوية تشمل امتيازات الدخول المسبق وخصومات على المتجر. سجلوا لدى إدارة النادي أو عبر المنصة.',
-    '');
+    '', '2026-09-08');
 
   INSERT INTO products (name, description, price, image_url, category, stock, active) VALUES
    ('وشاح الجراد الأصفر', 'وشاح رسمي بألوان النادي، قماش متين للاستعمال في المدرجات.', 1200, '', 'تشجيع', 50, true),
