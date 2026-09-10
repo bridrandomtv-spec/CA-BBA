@@ -587,7 +587,7 @@ test('récupération de mot de passe — jeton haché, usage unique, sessions r�
 });
 
 test('صندوق دعم النادي — campagne réelle administrable (bloc mort supprimé)', () => {
-  assert.ok(migrations().some((f) => f.includes('support_campaigns')));
+  assert.ok(migrations().some((f) => f.includes('support_fund')));
   const support = read('server/api/support.ts');
   assert.match(support, /support_campaigns/);
   assert.match(support, /support_donations/);
