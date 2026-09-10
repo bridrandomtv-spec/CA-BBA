@@ -24,6 +24,7 @@ import { weatherRouter } from "./server/api/weather.js";
 import { galleryRouter } from "./server/api/gallery.js";
 import { predictionsRouter } from "./server/api/predictions.js";
 import { pollsRouter } from "./server/api/polls.js";
+import { supportRouter } from "./server/api/support.js";
 import { startFootballScheduler, stopFootballScheduler } from "./server/football/scheduler.js";
 import { pool, query } from "./server/db/index.js";
 import { requestId, securityHeaders } from "./server/security.js";
@@ -101,6 +102,7 @@ app.use("/api/weather", weatherRouter);
 app.use("/api/gallery", galleryRouter);
 app.use("/api/predictions", predictionsRouter);
 app.use("/api/polls", pollsRouter);
+app.use("/api/support", supportRouter);
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY ?? "" });
 

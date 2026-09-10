@@ -49,11 +49,22 @@ function matchTimestamp(match: Match): number {
   return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
 }
 
+interface SupportCampaign {
+  id: string;
+  title: string;
+  goal: number;
+  raised: number;
+  donationsCount: number;
+  bankInfo: string | null;
+  active: boolean;
+}
+
 export default function Home({ onNavigate }: HomeProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   const [news, setNews] = useState<NewsItem[]>([]);
   const [teamSummary, setTeamSummary] = useState<TeamSummary>(EMPTY_TEAM_SUMMARY);
+  const [campaign, setCampaign] = useState<SupportCampaign | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,7 +72,7 @@ export default function Home({ onNavigate }: HomeProps) {
     const load = async () => {
       // Les trois requêtes sont indépendantes : un échec de /api/news ne doit
       // pas priver l'écran du prochain match, et inversement.
-      const [matchesResult, newsResult, summaryResult] = await Promise.allSettled([
+      const [matchesResult, newsResult, summaryResult, campaignResult] = await Promise.allSettled([
         fetch('/api/matches', { credentials: 'same-origin' }).then(async (res) => {
           if (!res.ok) throw new Error(`/api/matches → ${res.status}`);
           return toMatchArray(await res.json());
@@ -71,6 +82,11 @@ export default function Home({ onNavigate }: HomeProps) {
           return toNewsArray(await res.json());
         }),
         fetchTeamSummary(),
+        // Campagne du صندوق : null si aucune campagne active (le bloc
+        // disparaît alors entièrement de l'accueil).
+        fetch('/api/support/campaign', { credentials: 'same-origin' })
+          .then(async (res) => (res.ok ? res.json() : null))
+          .then((data) => (data && data.campaign ? data.campaign : null)),
       ]);
 
       if (cancelled) return;
@@ -89,6 +105,10 @@ export default function Home({ onNavigate }: HomeProps) {
 
       if (summaryResult.status === 'fulfilled') {
         setTeamSummary(summaryResult.value);
+      }
+
+      if (campaignResult.status === 'fulfilled') {
+        setCampaign(campaignResult.value as SupportCampaign | null);
       }
     };
 
@@ -213,19 +233,48 @@ export default function Home({ onNavigate }: HomeProps) {
         <ChevronLeft size={20} className="text-zinc-500 group-hover:text-white transition-colors" />
       </div>
 
-      {/* Financial Transparency / Campaign */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-lg overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-2xl translate-x-10 -translate-y-10"></div>
-        <div className="relative z-10">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-lg text-white">صندوق دعم النادي</h3>
-          </div>
+      {/* صندوق دعم النادي — campagne réelle gérée depuis لوحة الإدارة.
+          Aucune campagne active : le bloc disparaît entièrement (plus de
+          boîte morte héritée du code d'origine). */}
+      {campaign && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-lg overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-2xl translate-x-10 -translate-y-10"></div>
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-3 gap-2">
+              <h3 className="font-bold text-lg text-white">صندوق دعم النادي</h3>
+              <span className="text-[10px] bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded font-bold truncate max-w-[60%]">
+                {campaign.title}
+              </span>
+            </div>
 
-          <div className="text-center text-zinc-500 py-6 border border-zinc-800 border-dashed rounded-xl text-xs">
-            البيانات غير متوفرة حالياً
+            {campaign.goal > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-zinc-400 mb-1">
+                  <span>{campaign.raised.toLocaleString('ar-DZ')} د.ج مجموعة</span>
+                  <span>الهدف {campaign.goal.toLocaleString('ar-DZ')} د.ج</span>
+                </div>
+                <div className="h-3 bg-zinc-800 rounded-full overflow-hidden mb-3" role="progressbar"
+                  aria-valuenow={campaign.raised} aria-valuemin={0} aria-valuemax={campaign.goal}>
+                  <div
+                    className="h-full bg-gradient-to-l from-yellow-400 to-yellow-600 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.round((campaign.raised / campaign.goal) * 100))}%` }}
+                  />
+                </div>
+              </>
+            )}
+
+            {campaign.bankInfo && (
+              <p className="text-xs text-zinc-300 bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 whitespace-pre-line leading-relaxed">
+                {campaign.bankInfo}
+              </p>
+            )}
+
+            <p className="text-[10px] text-zinc-600 mt-2">
+              {campaign.donationsCount.toLocaleString('ar-DZ')} عملية موثقة · تحديث من إدارة النادي
+            </p>
           </div>
         </div>
-      </div>
+      )}
 
       {/* News Section — alimentée par /api/news (PostgreSQL) */}
       <div>
