@@ -68,6 +68,10 @@ const HOST = env.host;
 
 const GEMINI_API_KEY = env.geminiApiKey;
 
+// Repli galerie sans R2 : les photos compressées côté client arrivent en
+// data-URL jusqu'à 500 Ko — au-delà du parseur global 128 Ko. Parseur dédié
+// monté AVANT le global, qui ignorera ces corps déjà lus (req._body).
+app.use('/api/gallery', express.json({ limit: '600kb' }));
 app.use(express.json({ limit: '128kb' }));
 app.use(express.urlencoded({ extended: false, limit: '32kb' }));
 app.use(cookieParser());
