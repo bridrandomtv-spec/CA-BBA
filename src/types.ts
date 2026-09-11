@@ -81,6 +81,6 @@ export interface AppUser {
   email: string;
   displayName: string;
   avatarUrl?: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'scanner';
   createdAt?: string;
 }
