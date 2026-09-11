@@ -45,6 +45,7 @@ const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
 const TicketScanner = lazy(() => import('./components/TicketScanner'));
 const LegalPages = lazy(() => import('./components/LegalPages'));
+import ClubLogo from './components/ClubLogo';
 
 /** Routes par hash : `#/store` partagé ouvre directement le bon écran. */
 const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner', 'legal'];
@@ -217,9 +218,7 @@ export default function App() {
             recadrage : aucun arrondi par enfant. */}
         <aside className="hidden md:flex md:flex-col md:w-60 md:shrink-0 border-l border-zinc-900 bg-zinc-950/60 p-4" aria-label="التنقل الرئيسي">
           <div className="flex items-center gap-3 px-2 py-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center font-bold text-black text-xl shadow-[0_0_15px_rgba(234,179,8,0.3)]">
-              C
-            </div>
+            <ClubLogo size={40} />
             <div className="text-right">
               <h1 className="text-lg font-bold tracking-tight text-white leading-tight">CABBA</h1>
               <p className="text-[9px] text-yellow-500 uppercase tracking-wider font-semibold">Bordj Bou Arreridj</p>
@@ -261,9 +260,7 @@ export default function App() {
               on garde le titre d'onglet + la cloche de notifications. */}
           <header className="flex-none bg-zinc-900 border-b border-yellow-500/20 p-4 pt-safe flex items-center justify-between z-10 shadow-md md:pt-4 md:bg-transparent md:border-zinc-900 md:shadow-none">
             <div className="flex items-center gap-3 md:hidden">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center font-bold text-black text-xl shadow-[0_0_15px_rgba(234,179,8,0.3)]">
-                C
-              </div>
+              <ClubLogo size={40} />
               <div className="text-right">
                 <h1 className="text-xl font-bold tracking-tight text-white leading-tight">CABBA</h1>
                 <p className="text-[10px] text-yellow-500 uppercase tracking-wider font-semibold">Bordj Bou Arreridj</p>
