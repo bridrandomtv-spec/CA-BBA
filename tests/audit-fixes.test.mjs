@@ -718,3 +718,19 @@ test('email « تذكرتك جاهزة » — envoyé à l émission avec email 
   assert.match(tickets, /sendTicketIssuedEmail\(ownerEmailResolved/);
   assert.match(tickets, /\.catch\(\(err\) => console\.error\('\[CABBA\] ticket email:', err\)\)/, 'non bloquant');
 });
+
+test('pack sponsors — vitrine publique active + CRUD admin (programme 2/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('023_sponsors')));
+  const sp = read('server/api/sponsors.ts');
+  assert.match(sp, /WHERE active = TRUE/, 'vitrine publique = partenaires actifs seulement');
+  assert.match(sp, /requireAdmin/);
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/sponsors", sponsorsRouter\)/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /<SponsorsStrip \/>/, 'vitrine sur l accueil');
+  const strip = read('src/components/SponsorsStrip.tsx');
+  assert.match(strip, /sponsors\.length === 0\) return null/, 'aucun bloc mort sans sponsor');
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /شركاء النادي/);
+  assert.ok(exists('src/components/admin/AdminSponsors.tsx'));
+});
