@@ -734,3 +734,25 @@ test('pack sponsors — vitrine publique active + CRUD admin (programme 2/8)', (
   assert.match(dash, /شركاء النادي/);
   assert.ok(exists('src/components/admin/AdminSponsors.tsx'));
 });
+
+test('pack gouvernance — journal d audit des admins + export global Article 6 (programme 3/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('024_admin_audit')));
+  const log = read('server/auditLog.ts');
+  assert.match(log, /admin_audit_log/);
+  const audit = read('server/api/audit.ts');
+  assert.match(audit, /requireAdmin/);
+  assert.match(audit, /\/export/);
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /logAdmin\(req\.user, 'ticket\.issue'/);
+  assert.match(tickets, /logAdmin\(req\.user, 'ticket\.cancel'/);
+  assert.match(tickets, /logAdmin\(req\.user, 'ticket\.assign'/);
+  const users = read('server/api/users.ts');
+  assert.match(users, /logAdmin\(req\.user,'user\.role'/);
+  const sponsors = read('server/api/sponsors.ts');
+  assert.match(sponsors, /logAdmin\(req\.user, 'sponsor\.create'/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /سجل التدقيق والتصدير/);
+  const ui = read('src/components/admin/AdminAudit.tsx');
+  assert.match(ui, /Article 6/);
+  assert.match(ui, /text\/csv/);
+});
