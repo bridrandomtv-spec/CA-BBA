@@ -708,3 +708,13 @@ test('blason du club visible partout — ClubLogo avec repli SVG', () => {
   const acc = read('src/components/admin/AdminAccounting.tsx');
   assert.match(acc, /<ClubLogo size=\{72\} \/>/, 'blason sur l état financier');
 });
+
+test('email « تذكرتك جاهزة » — envoyé à l émission avec email et à l assign', () => {
+  const email = read('server/email.ts');
+  assert.match(email, /ticket_issued/);
+  assert.match(email, /sendTicketIssuedEmail/);
+  assert.match(email, /عرض تذكرتي/, 'bouton vers تذاكري');
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /sendTicketIssuedEmail\(ownerEmailResolved/);
+  assert.match(tickets, /\.catch\(\(err\) => console\.error\('\[CABBA\] ticket email:', err\)\)/, 'non bloquant');
+});
