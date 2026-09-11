@@ -51,7 +51,7 @@ export const BCRYPT_ROUNDS = 12;
 export const MIN_PASSWORD_LENGTH = 12;
 
 /** Rôles acceptés, alignés sur la contrainte CHECK de la table users. */
-export const ROLES = ['user', 'admin'] as const;
+export const ROLES = ['user', 'admin', 'scanner'] as const as const;
 export type Role = (typeof ROLES)[number];
 
 export interface AuthUser {
