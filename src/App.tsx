@@ -14,7 +14,7 @@
 //  - résilience : ScreenErrorBoundary par écran — un crash ne démonte plus
 //         toute l'application (la coquille et la navigation survivent).
 import { useState, useEffect, lazy, Suspense } from 'react';
-import type { LucideIcon } , Landmarkfrom 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Tab } from './types';
 import { readString, STORAGE_KEYS, writeString } from './lib/storage';
 import BottomNav from './components/BottomNav';
@@ -23,7 +23,7 @@ import ConsentBanner from './components/ConsentBanner';
 import {
   Bell, Bot, X,
   Home as HomeIcon, Trophy, Tv, Music, ShoppingBag, Users, User as UserIcon, ShieldAlert,
-} from 'lucide-react';
+, Landmark } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
 import ResetPassword from './components/auth/ResetPassword';
