@@ -9,6 +9,7 @@ import Achievements from './Achievements';
 import { QRCodeSVG } from 'qrcode.react';
 import MyTickets from './MyTickets';
 import LoyaltyCard from './LoyaltyCard';
+import LoyaltyCard from './LoyaltyCard';
 import { useTheme } from '../ThemeContext';
 import { clearAnalyticsConsent, getAnalyticsConsent } from '../lib/consent';
 
@@ -395,6 +396,7 @@ export default function Profile() {
 
       {/* تذاكري — tickets réellement liées au compte (owner_id) */}
       <MyTickets />
+      <LoyaltyCard />
 
       {/* وفاء الجراد — points de fidélité */}
       <LoyaltyCard />
