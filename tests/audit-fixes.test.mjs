@@ -756,3 +756,22 @@ test('pack gouvernance — journal d audit des admins + export global Article 6 
   assert.match(ui, /Article 6/);
   assert.match(ui, /text\/csv/);
 });
+
+test('وفاء الجراد — grand livre de fidélité, sources scan/commande, paliers (programme 5/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('026_loyalty')));
+  const core = read('server/loyalty.ts');
+  assert.match(core, /loyalty_ledger/);
+  assert.match(core, /export async function grantPoints/);
+  const api = read('server/api/loyalty.ts');
+  assert.match(api, /\/me/);
+  assert.match(api, /\/top/);
+  assert.match(api, /\/grant/);
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /grantPoints\(updated\.rows\[0\]\.owner_id, 10, 'scan'/, 'le scan récompense le présent');
+  const store = read('server/api/store.ts');
+  assert.match(store, /grantPoints\(orderResult\.rows\[0\]\.user_id, 20, 'order'/, 'la commande confirmée récompense');
+  const prof = read('src/components/Profile.tsx');
+  assert.match(prof, /<LoyaltyCard \/>/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /وفاء الجراد/);
+});
