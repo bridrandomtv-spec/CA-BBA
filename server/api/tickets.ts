@@ -10,6 +10,7 @@ import crypto from 'crypto';
 import { query } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { isValidationError, optionalString, requireString } from './validate.js';
+import { sendTicketIssuedEmail } from '../email.js';
 
 export const ticketsRouter = Router();
 
@@ -68,13 +69,15 @@ ticketsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promi
 
     // Envoi optionnel au compte d'un supporter existant
     let ownerId: string | null = null;
+    let ownerEmailResolved: string | null = null;
     if (typeof ownerEmail === 'string' && ownerEmail.trim()) {
-      const u = await query('SELECT id FROM users WHERE lower(email) = lower($1)', [ownerEmail.trim()]);
+      const u = await query('SELECT id, email FROM users WHERE lower(email) = lower($1)', [ownerEmail.trim()]);
       if (!u.rows.length) {
         res.status(404).json({ error: 'البريد غير مسجل في التطبيق.' });
         return;
       }
       ownerId = u.rows[0].id;
+      ownerEmailResolved = u.rows[0].email as string;
     }
 
     // Code unique : 3 tentatives suffisent (espace 32^12)
@@ -88,6 +91,15 @@ ticketsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promi
         [matchId, code, cleanHolder, cleanCategory, cleanPrice, req.user!.id, ownerId],
       );
       if (inserted.rows.length) {
+        if (ownerId && ownerEmailResolved) {
+          void sendTicketIssuedEmail(ownerEmailResolved, {
+            code,
+            matchLabel: `${match.rows[0].home_team} — ${match.rows[0].away_team}`,
+            category: cleanCategory,
+            price: cleanPrice,
+            holderName: cleanHolder || undefined,
+          }).catch((err) => console.error('[CABBA] ticket email:', err));
+        }
         res.status(201).json({ ticket: mapTicket(inserted.rows[0]) });
         return;
       }
@@ -286,7 +298,7 @@ ticketsRouter.post('/:id/assign', requireAdmin, async (req: Request, res: Respon
       res.status(400).json({ error: 'بريد الأنصار مطلوب.' });
       return;
     }
-    const u = await query('SELECT id FROM users WHERE lower(email) = lower($1)', [email]);
+    const u = await query('SELECT id, email FROM users WHERE lower(email) = lower($1)', [email]);
     if (!u.rows.length) {
       res.status(404).json({ error: 'البريد غير مسجل في التطبيق.' });
       return;
@@ -299,6 +311,13 @@ ticketsRouter.post('/:id/assign', requireAdmin, async (req: Request, res: Respon
       res.status(404).json({ error: 'التذكرة غير موجودة.' });
       return;
     }
+    void sendTicketIssuedEmail(u.rows[0].email as string, {
+      code: result.rows[0].code,
+      matchLabel: result.rows[0].home_team ? `${result.rows[0].home_team} — ${result.rows[0].away_team}` : '',
+      category: result.rows[0].category,
+      price: Number(result.rows[0].price_dzd),
+      holderName: result.rows[0].holder_name || undefined,
+    }).catch((err) => console.error('[CABBA] ticket email:', err));
     res.json({ ticket: mapTicket(result.rows[0]) });
   } catch (error) {
     console.error('[CABBA] ticket assign:', error);
