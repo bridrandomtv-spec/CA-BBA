@@ -1,4 +1,4 @@
-export type Tab = 'home' | 'match' | 'chants' | 'tv' | 'store' | 'profile' | 'community' | 'admin';
+export type Tab = 'home' | 'match' | 'chants' | 'tv' | 'store' | 'profile' | 'community' | 'admin' | 'scanner';
 
 export interface ChatMessage {
   id: string;
