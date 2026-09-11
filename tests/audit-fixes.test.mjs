@@ -756,3 +756,21 @@ test('pack gouvernance — journal d audit des admins + export global Article 6 
   assert.match(ui, /Article 6/);
   assert.match(ui, /text\/csv/);
 });
+
+test('المتحف — mémoire officielle publique + CRUD admin (programme 4/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('025_museum')));
+  const mu = read('server/api/museum.ts');
+  assert.match(mu, /requireAdmin/);
+  assert.match(mu, /ORDER BY year DESC/, 'frise chronologique');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/museum", museumRouter\)/);
+  const app = read('src/App.tsx');
+  assert.match(app, /case 'museum'/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /onNavigate\('museum'\)/, 'accès depuis l accueil');
+  const view = read('src/components/Museum.tsx');
+  assert.match(view, /entries\.length === 0/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /المتحف والبطولات/);
+  assert.ok(exists('src/components/admin/AdminMuseum.tsx'));
+});
