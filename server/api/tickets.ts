@@ -11,6 +11,7 @@ import { query } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { isValidationError, optionalString, requireString } from './validate.js';
 import { sendTicketIssuedEmail } from '../email.js';
+import { logAdmin } from '../auditLog.js';
 
 export const ticketsRouter = Router();
 
@@ -100,6 +101,7 @@ ticketsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promi
             holderName: cleanHolder || undefined,
           }).catch((err) => console.error('[CABBA] ticket email:', err));
         }
+        void logAdmin(req.user, 'ticket.issue', code);
         res.status(201).json({ ticket: mapTicket(inserted.rows[0]) });
         return;
       }
@@ -279,6 +281,7 @@ ticketsRouter.post('/:id/cancel', requireAdmin, async (req: Request, res: Respon
       res.status(404).json({ error: 'التذكرة غير موجودة أو ليست صالحة.' });
       return;
     }
+    void logAdmin(req.user, 'ticket.cancel', result.rows[0].code);
     res.json({ ticket: mapTicket(result.rows[0]) });
   } catch (error) {
     console.error('[CABBA] ticket cancel:', error);
@@ -311,6 +314,7 @@ ticketsRouter.post('/:id/assign', requireAdmin, async (req: Request, res: Respon
       res.status(404).json({ error: 'التذكرة غير موجودة.' });
       return;
     }
+    void logAdmin(req.user, 'ticket.assign', result.rows[0].code, email);
     void sendTicketIssuedEmail(u.rows[0].email as string, {
       code: result.rows[0].code,
       matchLabel: result.rows[0].home_team ? `${result.rows[0].home_team} — ${result.rows[0].away_team}` : '',
