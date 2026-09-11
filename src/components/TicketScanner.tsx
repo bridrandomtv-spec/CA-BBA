@@ -4,6 +4,9 @@
 // vibrations générés localement (WebAudio) : bip OK / alarme rejet.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, CameraOff, CheckCircle2, ScanLine, XCircle } from 'lucide-react';
+// Décodeur QR vendorisé (MIT, dans le bundle) : repli universel quand
+// BarcodeDetector est absent (Safari/iOS, anciens Chrome). CSP intacte.
+import jsQR from '../lib/vendor/jsQR.js';
 
 interface Flash { kind: 'ok' | 'reject'; title: string; detail: string; entries?: number; }
 
@@ -23,7 +26,7 @@ export default function TicketScanner() {
   const lastCodeRef = useRef<{ code: string; at: number }>({ code: '', at: 0 });
   const flashTimerRef = useRef<number | null>(null);
 
-  const hasDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+  const hasNativeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
   // ---- sons locaux (aucun fichier externe) ----
   const beep = useCallback((kind: 'ok' | 'reject') => {
@@ -109,10 +112,6 @@ export default function TicketScanner() {
     setError(null);
     // geste utilisateur : le contexte audio peut démarrer
     beep('ok');
-    if (!hasDetector) {
-      setError('متصفحك لا يملك كاشف رموز — استعمل إدخال الرمز يدوياً بالأسفل.');
-      return;
-    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       streamRef.current = stream;
@@ -121,20 +120,38 @@ export default function TicketScanner() {
         await videoRef.current.play();
       }
       const BD = (window as any).BarcodeDetector;
-      const detector = new BD({ formats: ['qr_code'] });
       setRunning(true);
-      loopRef.current = window.setInterval(async () => {
-        if (!videoRef.current || videoRef.current.readyState < 2) return;
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes.length && codes[0].rawValue) void scan(codes[0].rawValue);
-        } catch { /* image pas prête */ }
-      }, 250);
+      if (BD) {
+        // Voie native (Chrome/Android) : la plus rapide
+        const detector = new BD({ formats: ['qr_code'] });
+        loopRef.current = window.setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length && codes[0].rawValue) void scan(codes[0].rawValue);
+          } catch { /* image pas prête */ }
+        }, 250);
+      } else {
+        // Repli universel : jsQR décode la caméra image par image
+        const canvas = document.createElement('canvas');
+        const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+        loopRef.current = window.setInterval(() => {
+          const video = videoRef.current;
+          if (!video || video.readyState < 2 || !ctx2d || !video.videoWidth) return;
+          const scale = Math.min(1, 480 / video.videoWidth);
+          canvas.width = Math.max(1, Math.floor(video.videoWidth * scale));
+          canvas.height = Math.max(1, Math.floor(video.videoHeight * scale));
+          ctx2d.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const frame = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+          const found = jsQR(frame.data, frame.width, frame.height);
+          if (found && found.data) void scan(found.data);
+        }, 220);
+      }
     } catch (e) {
       setError('تعذر فتح الكاميرا — استعمل الإدخال اليدوي.');
       stop();
     }
-  }, [hasDetector, scan, beep, stop]);
+  }, [scan, beep, stop]);
 
   useEffect(() => () => {
     if (loopRef.current) window.clearInterval(loopRef.current);
@@ -191,7 +208,7 @@ export default function TicketScanner() {
                 className="bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm px-6 py-3 rounded-xl transition-colors">
                 بدء المراقبة بالكاميرا
               </button>
-              {!hasDetector && <p className="text-zinc-500 text-[10px] px-6 text-center">كاميرا غير مدعومة هنا — الإدخال اليدوي متاح بالأسفل</p>}
+              {!hasNativeDetector && <p className="text-zinc-500 text-[10px] px-6 text-center">كاشف أصلي غير متوفر — يتم استعمال الكاشف المدمج في التطبيق</p>}
             </div>
           )}
           {running && (
