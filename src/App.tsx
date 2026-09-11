@@ -23,6 +23,7 @@ import ConsentBanner from './components/ConsentBanner';
 import {
   Bell, Bot, X,
   Home as HomeIcon, Trophy, Tv, Music, ShoppingBag, Users, User as UserIcon, ShieldAlert,
+  Landmark,
 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
@@ -45,10 +46,11 @@ const NotificationCenter = lazy(() => import('./components/NotificationCenter'))
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
 const TicketScanner = lazy(() => import('./components/TicketScanner'));
 const LegalPages = lazy(() => import('./components/LegalPages'));
+const Museum = lazy(() => import('./components/Museum'));
 import ClubLogo from './components/ClubLogo';
 
 /** Routes par hash : `#/store` partagé ouvre directement le bon écran. */
-const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner', 'legal'];
+const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner', 'legal', 'museum'];
 
 function tabFromHash(): Tab | null {
   const raw = window.location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -64,6 +66,7 @@ const DESKTOP_NAV: Array<{ tab: Tab; label: string; icon: LucideIcon }> = [
   { tab: 'store', label: 'المتجر', icon: ShoppingBag },
   { tab: 'community', label: 'المجتمع', icon: Users },
   { tab: 'profile', label: 'الملف الشخصي', icon: UserIcon },
+  { tab: 'museum', label: 'المتحف', icon: Landmark },
 ];
 
 function ScreenFallback() {
@@ -156,6 +159,7 @@ export default function App() {
       case 'admin': return userData?.role === 'admin' ? <AdminDashboard /> : <Home onNavigate={setActiveTab} />;
       case 'scanner': return (userData?.role === 'admin' || userData?.role === 'scanner') ? <TicketScanner /> : <Home onNavigate={setActiveTab} />;
       case 'legal': return <LegalPages />;
+      case 'museum': return <Museum />;
       default: return <Home onNavigate={setActiveTab} />;
     }
   };
