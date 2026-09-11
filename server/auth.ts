@@ -297,6 +297,11 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     );
 
     const row = result.rows[0];
+    // Pack crédibilité : preuve horodatée du consentement loi 18-07,
+    // transmise par le client d'inscription (case à cocher).
+    if (req.body?.consent === true) {
+      await query('UPDATE users SET consent_at = NOW() WHERE id = $1', [row.id]);
+    }
     const user = toAuthUser(row);
     setSessionCookie(res, user.id, row.token_version);
     res.status(201).json({ user });
