@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { isValidationError, optionalString, requireString } from './validate.js';
+import { logAdmin } from '../auditLog.js';
 
 export const sponsorsRouter = Router();
 
@@ -55,6 +56,7 @@ sponsorsRouter.post('/', requireAdmin, async (req: Request, res: Response): Prom
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [name, url, logoUrl, position, req.body?.active !== false],
     );
+    void logAdmin(req.user, 'sponsor.create', name);
     res.status(201).json({ sponsor: mapSponsor(result.rows[0]) });
   } catch (error) {
     if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
@@ -79,6 +81,7 @@ sponsorsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): 
        WHERE id=$1 RETURNING *`,
       [req.params.id, name, url, logoUrl, position, active],
     );
+    void logAdmin(req.user, 'sponsor.update', String(req.params.id), name);
     res.json({ sponsor: mapSponsor(updated.rows[0]) });
   } catch (error) {
     if (isValidationError(error)) { res.status(400).json({ error: error.message }); return; }
@@ -92,6 +95,7 @@ sponsorsRouter.delete('/:id', requireAdmin, async (req: Request, res: Response):
     if (!UUID_RE.test(String(req.params.id))) { res.status(400).json({ error: 'Identifiant invalide.' }); return; }
     const result = await query('DELETE FROM sponsors WHERE id=$1 RETURNING id', [req.params.id]);
     if (!result.rows.length) { res.status(404).json({ error: 'الشريك غير موجود.' }); return; }
+    void logAdmin(req.user, 'sponsor.delete', String(req.params.id));
     res.json({ deleted: true });
   } catch (error) {
     console.error('[CABBA] sponsor delete:', error);
