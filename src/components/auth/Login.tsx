@@ -34,6 +34,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -98,6 +99,10 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
     // ---- Connexion / inscription ----
     // Pré-validation alignée sur le serveur : évite un aller-retour inutile.
+    if (isRegister && !termsAccepted) {
+      setError('الموافقة على شروط الاستخدام وسياسة الخصوصية مطلوبة لإنشاء حساب.');
+      return;
+    }
     if (isRegister && password.length < MIN_PASSWORD_LENGTH) {
       setError(`كلمة المرور يجب أن تحتوي على ${MIN_PASSWORD_LENGTH} أحرف على الأقل.`);
       return;
@@ -111,7 +116,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
-          isRegister ? { email, password, displayName: name } : { email, password },
+          isRegister ? { email, password, displayName: name, termsAccepted } : { email, password },
         ),
       });
 
@@ -173,6 +178,14 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+          {isRegister && (
+            <label className="flex items-start gap-2 text-[11px] text-zinc-400 leading-relaxed">
+              <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-0.5 accent-yellow-500" />
+              <span>
+                أوافق على <a href="#/legal/terms" className="text-yellow-500 underline">شروط الاستخدام</a> و<a href="#/legal/privacy" className="text-yellow-500 underline">سياسة الخصوصية</a>
+              </span>
+            </label>
+          )}
           {isRegister && (
             <div className="relative">
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-zinc-500">
