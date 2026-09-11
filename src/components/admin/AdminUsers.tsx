@@ -118,6 +118,7 @@ export default function AdminUsers({ onBack }: { onBack: () => void }) {
               >
                 <option value="user" className="bg-zinc-900">مشجع عادي</option>
                 <option value="admin" className="bg-zinc-900">مدير (Admin)</option>
+                        <option value="scanner">scanner — مراقب تذاكر</option>
               </select>
             </div>
           </div>
