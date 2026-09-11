@@ -86,7 +86,7 @@ after(async () => {
 test('export : toutes les données du compte, sans secret', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'RGPD Test' },
+    body: { email, password: PASSWORD, displayName: 'RGPD Test', termsAccepted: true },
   });
   assert.equal(created.status, 201);
   const userId: string = created.body.user.id;
@@ -124,7 +124,7 @@ test('export : toutes les données du compte, sans secret', { skip: skipReason }
 test('suppression : anonymise, préserve la comptabilité, révoque la session, libère l’email', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'À Supprimer' },
+    body: { email, password: PASSWORD, displayName: 'À Supprimer', termsAccepted: true },
   });
   assert.equal(created.status, 201);
   const userId: string = created.body.user.id;
@@ -177,7 +177,7 @@ test('suppression : anonymise, préserve la comptabilité, révoque la session, 
 
   // 6. …et l'email est libéré pour une réinscription.
   const again = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Réinscrit' },
+    body: { email, password: PASSWORD, displayName: 'Réinscrit', termsAccepted: true },
   });
   assert.equal(again.status, 201);
   createdIds.push(again.body.user.id);
