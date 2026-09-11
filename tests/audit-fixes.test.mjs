@@ -624,3 +624,13 @@ test('مراقبة التذاكر الإلكترونية — scanneur mobile, us
   assert.match(dash, /التذاكر والمراقبة/);
   assert.ok(exists('src/components/admin/AdminTickets.tsx'));
 });
+
+test('كاشف الرموز المدمج — repli jsQR vendorisé quand BarcodeDetector manque', () => {
+  assert.ok(exists('src/lib/vendor/jsQR.js'), 'décodeur QR vendorisé (MIT) dans le bundle');
+  assert.ok(exists('src/lib/vendor/jsQR.d.ts'), 'typage TS du module vendorisé');
+  const scan = read('src/components/TicketScanner.tsx');
+  assert.match(scan, /import jsQR from '..\/lib\/vendor\/jsQR.js'/);
+  assert.match(scan, /jsQR\(frame\.data/, 'boucle de décodage caméra image par image');
+  assert.match(scan, /hasNativeDetector/, 'voie native conservée quand disponible');
+  assert.doesNotMatch(scan, /متصفحك لا يملك كاشف رموز/, 'plus aucun navigateur bloqué sans détecteur natif');
+});
