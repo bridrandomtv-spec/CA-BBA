@@ -86,7 +86,9 @@ export const securityHeaders: RequestHandler = (_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  // camera=(self) : INDISPENSABLE au scanneur de tickets (getUserMedia).
+    // microphone/geolocation restent interdits (aucun usage dans l'app).
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('X-DNS-Prefetch-Control', 'off');
 
