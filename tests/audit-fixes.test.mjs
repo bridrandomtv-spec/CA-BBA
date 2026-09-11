@@ -641,3 +641,20 @@ test('sélecteur de match du module tickets — tolérant au tableau camelCase d
   assert.match(at, /x\.homeTeam/, 'lit le camelCase de la route historique');
   assert.match(at, /x\.home_team/, 'tolère le snake_case par compatibilité');
 });
+
+test('شباك التذاكر v2 — طباعة، إرسال للحساب، تذاكري في الملف الشخصي', () => {
+  assert.ok(migrations().some((f) => f.includes('021_tickets_owner')));
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /\/mine/, 'route mes tickets du supporter');
+  assert.match(tickets, /owner_id/);
+  assert.match(tickets, /assign/);
+  const at = read('src/components/admin/AdminTickets.tsx');
+  assert.match(at, /window\.print\(\)/, 'impression carte QR');
+  assert.match(at, /print-ticket/);
+  assert.match(at, /السعر بالدينار/, 'étiquette permanente du prix');
+  assert.match(at, /navigator\.clipboard/);
+  const prof = read('src/components/Profile.tsx');
+  assert.match(prof, /<MyTickets \/>/);
+  assert.doesNotMatch(prof, /TICKET-78X92/, 'placeholder mort remplacé par les vrais tickets');
+  assert.ok(exists('src/components/MyTickets.tsx'));
+});
