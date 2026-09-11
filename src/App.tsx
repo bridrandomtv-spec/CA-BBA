@@ -23,7 +23,8 @@ import ConsentBanner from './components/ConsentBanner';
 import {
   Bell, Bot, X,
   Home as HomeIcon, Trophy, Tv, Music, ShoppingBag, Users, User as UserIcon, ShieldAlert,
-, Landmark } from 'lucide-react';
+  Landmark,
+} from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
 import ResetPassword from './components/auth/ResetPassword';
