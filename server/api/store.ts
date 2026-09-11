@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { query, pool } from '../db/index.js';
+import { grantPoints } from '../loyalty.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { createRateLimiter } from '../rateLimit.js';
 import { sendEmail, orderConfirmationEmail, orderStatusEmail } from '../email.js';
@@ -221,7 +222,7 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
     // Verrou FOR UPDATE : deux admins qui annulent la même commande
     // simultanément ne peuvent pas restocker deux fois.
     const orderResult = await client.query(
-      'SELECT id, status FROM orders WHERE id=$1 FOR UPDATE',
+      'SELECT id, status, user_id FROM orders WHERE id=$1 FOR UPDATE',
       [orderId],
     );
     if (!orderResult.rows.length) {
@@ -254,6 +255,9 @@ storeRouter.patch('/orders/:id/status', requireAdmin, async (req, res) => {
       [status, orderId],
     );
     await client.query('COMMIT');
+    if (status === 'confirmed' && previousStatus !== 'confirmed') {
+      void grantPoints(orderResult.rows[0].user_id, 20, 'order', orderId);
+    }
     res.json({ success: true });
 
     // Notification de suivi — seulement pour les statuts qui changent
