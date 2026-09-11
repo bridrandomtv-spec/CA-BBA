@@ -775,3 +775,23 @@ test('وفاء الجراد — grand livre de fidélité, sources scan/commande
   const dash = read('src/components/admin/AdminDashboard.tsx');
   assert.match(dash, /وفاء الجراد/);
 });
+
+test('fidélité du Jarrad — ledger, gains scan/commande, paliers au profil (programme 5/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('026_loyalty')));
+  const log = read('server/loyaltyLog.ts');
+  assert.match(log, /loyalty_ledger/);
+  assert.match(log, /tierOf/);
+  const loy = read('server/api/loyalty.ts');
+  assert.match(loy, /\/me/);
+  assert.match(loy, /\/top/);
+  assert.match(loy, /\/grant/);
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/loyalty", loyaltyRouter\)/);
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /addPoints\(row\.owner_id, 5, 'scan'/, 'assiduité récompensée');
+  const store = read('server/api/store.ts');
+  assert.match(store, /addPoints\(ownerRow\.rows\[0\]\.user_id, 10, 'order'/);
+  const prof = read('src/components/Profile.tsx');
+  assert.match(prof, /<LoyaltyCard \/>/);
+  assert.ok(exists('src/components/LoyaltyCard.tsx'));
+});
