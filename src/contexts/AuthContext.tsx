@@ -11,7 +11,7 @@ interface UserData {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'scanner';
   createdAt: string;
 }
 
