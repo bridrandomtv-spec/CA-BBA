@@ -1,7 +1,7 @@
 import { query } from './db/index.js';
 import { env } from './env.js';
 
-export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'order' | 'password_reset' | 'system';
+export type EmailKind = 'welcome' | 'match_reminder' | 'final_score' | 'order' | 'password_reset' | 'system' | 'ticket_issued';
 
 export interface SendEmailInput {
   userId?: string;
@@ -37,6 +37,21 @@ function brandHtml(html: string): string {
   return html
     .replace(/<body[^>]*>/i, (m) => m + header)
     .replace(/<\/body>/i, footer + '</body>');
+}
+
+function ticketIssuedEmail(t: { code: string; matchLabel: string; category: string; price: number; holderName?: string }) {
+  const cat: Record<string, string> = { virage: 'منعرج', tribune: 'منصة', vip: 'VIP' };
+  const holder = t.holderName ? ` · ${escapeHtml(t.holderName)}` : '';
+  return {
+    subject: 'تذكرتك جاهزة — CABBA',
+    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif;background:#0d0d0d;padding:24px"><div style="max-width:620px;margin:auto;border-radius:16px;overflow:hidden;background:#ffffff"><div style="background:#f5c400;padding:16px;text-align:center"><p style="margin:0;color:#111;font-weight:800;font-size:16px">تذكرتك جاهزة — ادخل بها من البوابة</p></div><div style="padding:28px;text-align:center;color:#111"><p style="margin:0 0 4px;font-weight:700;font-size:15px">${escapeHtml(t.matchLabel)}</p><p style="margin:0 0 16px;color:#555;font-size:12px">${escapeHtml(cat[t.category] ?? t.category)} · ${t.price} د.ج${holder}</p><p style="font-family:monospace;font-size:26px;letter-spacing:6px;margin:8px 0">${escapeHtml(t.code)}</p><p style="font-size:12px;color:#555">دخول واحد لكل تذكرة — اعرض هذا الرمز أو رمز QR من ملفك الشخصي (تذاكري).</p><a href="${env.appBaseUrl}/#/profile" style="display:inline-block;margin-top:14px;background:#111;color:#f5c400;font-weight:800;padding:12px 22px;border-radius:12px;text-decoration:none">عرض تذكرتي</a></div></div></body></html>`,
+  };
+}
+
+/** Envoi non bloquant : un échec email ne doit jamais casser l'émission. */
+export async function sendTicketIssuedEmail(to: string, t: { code: string; matchLabel: string; category: string; price: number; holderName?: string }) {
+  const m = ticketIssuedEmail(t);
+  return sendEmail({ to, subject: m.subject, html: m.html, kind: 'ticket_issued' });
 }
 
 export function isEmailConfigured() {
