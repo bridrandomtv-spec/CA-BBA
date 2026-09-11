@@ -139,7 +139,7 @@ test("l'inscription crée un utilisateur standard, normalise l'email et ignore u
   const r = await call(register, {
     email: '  Cabba.Test.' + randomUUID().toUpperCase() + '@Example.COM  ',
     password: PASSWORD,
-    displayName: '  Supporter Test  ',
+    displayName: '  Supporter Test  ', termsAccepted: true,
     role: 'admin',
   });
 
