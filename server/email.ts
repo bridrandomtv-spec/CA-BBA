@@ -51,9 +51,12 @@ export interface OrderEmailItem {
 }
 
 const ORDER_HTML_SHELL = (inner: string) =>
-  `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px">` +
-  `<div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px">${inner}</div>` +
-  `</body></html>`;
+  `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif;background:#0d0d0d;padding:24px">` +
+  `<div style="max-width:620px;margin:auto;border-radius:16px;overflow:hidden;background:#ffffff">` +
+  `<div style="background:#f5c400;padding:16px;text-align:center"><img src="${env.appBaseUrl}/icon-192.png" width="56" height="56" alt="CABBA" style="border-radius:50%;display:inline-block" /><p style="margin:8px 0 0;color:#111;font-weight:800;font-size:16px">نادي شباب أهلي برج بوعريريج (CABBA)</p></div>` +
+  `<div style="padding:28px">${inner}</div>` +
+  `<div style="background:#111111;color:#9ca3af;padding:14px 22px;font-size:11px;line-height:1.8">ملعب 20 أوت 1955 — برج بوعريريج · <a href="${env.appBaseUrl}" style="color:#f5c400;text-decoration:none">فتح منصة الأنصار</a><br/>رسالة آلية من منصة الأنصار الرسمية — سياسة الخصوصية وشروط الاستخدام داخل التطبيق (الملف الشخصي).</div>` +
+  `</div></body></html>`;
 
 /** Référence courte lisible : les 8 premiers caractères de l'UUID. */
 function shortRef(orderId: string): string {
