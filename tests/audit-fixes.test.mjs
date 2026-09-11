@@ -634,3 +634,9 @@ test('كاشف الرموز المدمج — repli jsQR vendorisé quand Barcode
   assert.match(scan, /hasNativeDetector/, 'voie native conservée quand disponible');
   assert.doesNotMatch(scan, /متصفحك لا يملك كاشف رموز/, 'plus aucun navigateur bloqué sans détecteur natif');
 });
+
+test('sélecteur de match du module tickets — tolérant au tableau camelCase de /api/matches', () => {
+  const at = read('src/components/admin/AdminTickets.tsx');
+  assert.match(at, /Array\.isArray\(d\)/, 'accepte la forme tableau historique');
+  assert.match(at, /homeTeam ?? x.home_team/, 'accepte camelCase et snake_case');
+});
