@@ -41,13 +41,14 @@ const mapTicket = (row: any) => ({
   status: row.status,
   usedAt: row.used_at ? new Date(row.used_at).toISOString() : null,
   usedGate: row.used_gate,
+  ownerId: row.owner_id ?? null,
   matchLabel: row.home_team ? `${row.home_team} — ${row.away_team}` : undefined,
 });
 
 /** Émission d'un ticket (admin) : bureau du club ou vente guichet. */
 ticketsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { matchId, holderName, category, price } = req.body ?? {};
+    const { matchId, holderName, category, price, ownerEmail } = req.body ?? {};
     if (typeof matchId !== 'string' || !UUID_RE.test(matchId)) {
       res.status(400).json({ error: 'matchId invalide.' });
       return;
@@ -65,15 +66,26 @@ ticketsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promi
       return;
     }
 
+    // Envoi optionnel au compte d'un supporter existant
+    let ownerId: string | null = null;
+    if (typeof ownerEmail === 'string' && ownerEmail.trim()) {
+      const u = await query('SELECT id FROM users WHERE lower(email) = lower($1)', [ownerEmail.trim()]);
+      if (!u.rows.length) {
+        res.status(404).json({ error: 'البريد غير مسجل في التطبيق.' });
+        return;
+      }
+      ownerId = u.rows[0].id;
+    }
+
     // Code unique : 3 tentatives suffisent (espace 32^12)
     for (let attempt = 0; attempt < 3; attempt++) {
       const code = newCode();
       const inserted = await query(
-        `INSERT INTO tickets (match_id, code, holder_name, category, price_dzd, issued_by)
-         VALUES ($1,$2,$3,$4,$5,$6)
+        `INSERT INTO tickets (match_id, code, holder_name, category, price_dzd, issued_by, owner_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)
          ON CONFLICT (code) DO NOTHING
          RETURNING *`,
-        [matchId, code, cleanHolder, cleanCategory, cleanPrice, req.user!.id],
+        [matchId, code, cleanHolder, cleanCategory, cleanPrice, req.user!.id, ownerId],
       );
       if (inserted.rows.length) {
         res.status(201).json({ ticket: mapTicket(inserted.rows[0]) });
@@ -193,6 +205,23 @@ ticketsRouter.post('/scan', requireAuth, async (req: Request, res: Response): Pr
   }
 });
 
+/** Mes tickets (supporter connecté) : QR au portique depuis le profil. */
+ticketsRouter.get('/mine', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT t.*, m.home_team, m.away_team FROM tickets t
+       JOIN matches m ON m.id = t.match_id
+       WHERE t.owner_id = $1
+       ORDER BY t.created_at DESC LIMIT 50`,
+      [req.user!.id],
+    );
+    res.json({ tickets: result.rows.map(mapTicket) });
+  } catch (error) {
+    console.error('[CABBA] my tickets:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 /** Compteurs par porte + totaux (admin ou scanner). */
 ticketsRouter.get('/stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
   if (!staffOk(req, res)) return;
@@ -241,6 +270,38 @@ ticketsRouter.post('/:id/cancel', requireAdmin, async (req: Request, res: Respon
     res.json({ ticket: mapTicket(result.rows[0]) });
   } catch (error) {
     console.error('[CABBA] ticket cancel:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Lier un ticket existant au compte d'un supporter (admin seul). */
+ticketsRouter.post('/:id/assign', requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!UUID_RE.test(String(req.params.id))) {
+      res.status(400).json({ error: 'Identifiant invalide.' });
+      return;
+    }
+    const email = optionalString(req.body?.email, 'email', 254);
+    if (!email) {
+      res.status(400).json({ error: 'بريد الأنصار مطلوب.' });
+      return;
+    }
+    const u = await query('SELECT id FROM users WHERE lower(email) = lower($1)', [email]);
+    if (!u.rows.length) {
+      res.status(404).json({ error: 'البريد غير مسجل في التطبيق.' });
+      return;
+    }
+    const result = await query(
+      'UPDATE tickets SET owner_id = $2 WHERE id = $1 RETURNING *',
+      [req.params.id, u.rows[0].id],
+    );
+    if (!result.rows.length) {
+      res.status(404).json({ error: 'التذكرة غير موجودة.' });
+      return;
+    }
+    res.json({ ticket: mapTicket(result.rows[0]) });
+  } catch (error) {
+    console.error('[CABBA] ticket assign:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
