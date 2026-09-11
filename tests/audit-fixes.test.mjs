@@ -691,3 +691,20 @@ test('pack crédibilité — pages légales, consentement tracé, emails brandé
   assert.match(app, /case 'legal'/, 'route publique des pages légales');
   assert.ok(exists('src/components/LegalPages.tsx'));
 });
+
+test('blason du club visible partout — ClubLogo avec repli SVG', () => {
+  assert.ok(exists('src/components/ClubLogo.tsx'));
+  const logo = read('src/components/ClubLogo.tsx');
+  assert.match(logo, /\/club-logo\.png/, 'image officielle servie depuis public/');
+  assert.match(logo, /onError/, 'repli automatique si le fichier manque');
+  assert.match(logo, /<svg/, 'blason SVG de secours jaune et noir');
+  const app = read('src/App.tsx');
+  assert.match(app, /<ClubLogo size=\{40\} \/>/, 'en-tête mobile et rail desktop');
+  assert.doesNotMatch(app, /rounded-full bg-gradient-to-br from-yellow-400/, 'ancien cercle « C » retiré');
+  const legal = read('src/components/LegalPages.tsx');
+  assert.match(legal, /<ClubLogo size=\{48\} \/>/);
+  const tickets = read('src/components/admin/AdminTickets.tsx');
+  assert.match(tickets, /<ClubLogo size=\{72\} \/>/, 'blason sur le ticket imprimé');
+  const acc = read('src/components/admin/AdminAccounting.tsx');
+  assert.match(acc, /<ClubLogo size=\{72\} \/>/, 'blason sur l état financier');
+});

@@ -3,6 +3,7 @@
 // Export CSV (Excel arabe) + impression d'un état signé-able.
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Download, Printer, Wallet } from 'lucide-react';
+import ClubLogo from '../ClubLogo';
 
 interface Summary {
   period: { from: string | null; to: string | null };
@@ -100,6 +101,7 @@ export default function AdminAccounting({ onBack }: { onBack: () => void }) {
       <div id="print-accounting" style={{ position: 'absolute', left: '-10000px', top: 0, width: '700px', background: '#fff', color: '#000', padding: '28px', fontFamily: 'sans-serif' }} dir="rtl">
         {data && (
           <>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><ClubLogo size={72} /></div>
             <p style={{ textAlign: 'center', fontWeight: 800, fontSize: 20, margin: 0 }}>نادي شباب أهلي برج بوعريريج (CABBA)</p>
             <p style={{ textAlign: 'center', fontSize: 13, margin: '4px 0 16px' }}>
               état financier — {period === 'month' ? 'الشهر الجاري' : period === '3m' ? 'آخر 3 أشهر' : 'كامل الفترة'} — حرر في {new Date().toLocaleDateString('ar-DZ')}
