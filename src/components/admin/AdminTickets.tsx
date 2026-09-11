@@ -31,7 +31,18 @@ export default function AdminTickets({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     fetch('/api/matches', { credentials: 'same-origin' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setMatches(d?.matches ?? []))
+      .then((d) => {
+        // /api/matches (route historique) renvoie un TABLEAU d'objets
+        // camelCase { homeTeam, awayTeam, date } — et non { matches }.
+        // Tolérance aux deux formes et aux deux conventions de noms.
+        const list = Array.isArray(d) ? d : (d?.matches ?? []);
+        setMatches(list.map((x: any) => ({
+          id: x.id as string,
+          home_team: (x.homeTeam ?? x.home_team) as string,
+          away_team: (x.awayTeam ?? x.away_team) as string,
+          match_date: (x.date ?? x.match_date) as string,
+        })));
+      })
       .catch(() => setMatches([]));
   }, []);
 
