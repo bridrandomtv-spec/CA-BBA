@@ -675,3 +675,19 @@ test('module comptabilité — agrégats sur pièces (billets, dons, boutique), 
   assert.match(dash, /المحاسبة والتقارير/);
   assert.ok(exists('src/components/admin/AdminAccounting.tsx'));
 });
+
+test('pack crédibilité — pages légales, consentement tracé, emails brandés CABBA', () => {
+  assert.ok(migrations().some((f) => f.includes('022_terms_consent')));
+  const auth = read('server/auth.ts');
+  assert.match(auth, /termsAccepted !== true/, 'inscription refusée sans consentement');
+  assert.match(auth, /terms_accepted_at/, 'consentement horodaté en base');
+  const login = read('src/components/auth/Login.tsx');
+  assert.match(login, /termsAccepted/);
+  assert.match(login, /#\/legal\//, 'liens légales dans le formulaire');
+  const email = read('server/email.ts');
+  assert.match(email, /data-cabba-brand/, 'gabarit club injecté une seule fois');
+  assert.match(email, /club-logo\.png/, 'logo du club dans chaque email');
+  const app = read('src/App.tsx');
+  assert.match(app, /case 'legal'/, 'route publique des pages légales');
+  assert.ok(exists('src/components/LegalPages.tsx'));
+});

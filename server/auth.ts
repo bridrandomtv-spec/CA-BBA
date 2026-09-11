@@ -278,6 +278,13 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    // Pack crédibilité : pas de compte sans consentement explicite
+    // aux conditions d'utilisation et à la politique de confidentialité.
+    if (req.body?.termsAccepted !== true) {
+      res.status(400).json({ error: 'الموافقة على شروط الاستخدام وسياسة الخصوصية مطلوبة لإنشاء حساب.' });
+      return;
+    }
+
     const existingUser = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
     if (existingUser.rows.length > 0) {
       res.status(409).json({ error: 'البريد الإلكتروني مستعمل بالفعل.' });
@@ -290,13 +297,18 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
     // ne doit jamais pouvoir créer un administrateur. token_version vaut 1
     // (défaut de la colonne) et est signé dans le cookie de session.
     const result = await query<UserRow>(
-      `INSERT INTO users (email, password_hash, display_name, role)
-       VALUES ($1, $2, $3, 'user')
+      `INSERT INTO users (email, password_hash, display_name, role, terms_accepted_at)
+       VALUES ($1, $2, $3, 'user', NOW())
        RETURNING ${USER_COLUMNS}`,
       [normalizedEmail, passwordHash, trimmedName],
     );
 
     const row = result.rows[0];
+    // Pack crédibilité : preuve horodatée du consentement loi 18-07,
+    // transmise par le client d'inscription (case à cocher).
+    if (req.body?.consent === true) {
+      await query('UPDATE users SET consent_at = NOW() WHERE id = $1', [row.id]);
+    }
     const user = toAuthUser(row);
     setSessionCookie(res, user.id, row.token_version);
     res.status(201).json({ user });

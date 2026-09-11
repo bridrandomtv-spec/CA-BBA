@@ -103,7 +103,7 @@ const tokenVersionOf = async (userId: string): Promise<number> =>
 test('logout révoque la session : le cookie présenté ensuite est refusé', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Supporter Test' },
+    body: { email, password: PASSWORD, displayName: 'Supporter Test', termsAccepted: true },
   });
   assert.equal(created.status, 201);
   const userId: string = created.body.user.id;
@@ -142,7 +142,7 @@ test('logout révoque la session : le cookie présenté ensuite est refusé', { 
 test('un jeton signé avant la migration 011 (sans claim tv) reste accepté, puis révocable', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Legacy Session' },
+    body: { email, password: PASSWORD, displayName: 'Legacy Session', termsAccepted: true },
   });
   assert.equal(created.status, 201);
   const userId: string = created.body.user.id;

@@ -15,6 +15,30 @@ export interface SendEmailInput {
 const configured = Boolean(env.resendApiKey && env.emailFrom && env.appBaseUrl);
 const RESEND_URL = 'https://api.resend.com/emails';
 
+/* ---- Pack crédibilité : gabarit club injecté dans CHAQUE email ---- */
+function brandHtml(html: string): string {
+  if (html.includes('data-cabba-brand')) return html;
+  const base = env.appBaseUrl ?? '';
+  const wrap = 'max-width:620px;margin:0 auto;';
+  const header =
+    `<div data-cabba-brand style="${wrap}background:#0a0a0a;border-radius:16px;padding:16px 22px;` +
+    `display:flex;align-items:center;gap:12px;direction:rtl;margin-bottom:10px">` +
+    `<img src="${escapeHtml(base)}/club-logo.png" alt="شعار CABBA" width="52" height="52" ` +
+    `style="border-radius:12px;background:#f2b705" />` +
+    `<div><p style="margin:0;color:#f2b705;font-weight:800;font-size:18px">CABBA</p>` +
+    `<p style="margin:0;color:#e4e4e7;font-size:11px">شباب أهلي برج بوعريريج — منصة الأنصار الرسمية</p></div></div>`;
+  const footer =
+    `<div style="${wrap}background:#0a0a0a;border-radius:16px;padding:14px 22px;direction:rtl;margin-top:10px">` +
+    `<p style="margin:0;color:#a1a1aa;font-size:11px">نادي شباب أهلي برج بوعريريج — ملعب 20 أوت 1955</p>` +
+    `<p style="margin:4px 0 0;font-size:11px">` +
+    `<a href="${escapeHtml(base)}" style="color:#f2b705">فتح التطبيق</a>` +
+    ` &#183; <a href="${escapeHtml(base)}/#/legal/privacy" style="color:#a1a1aa">سياسة الخصوصية</a>` +
+    ` &#183; <a href="${escapeHtml(base)}/#/legal/terms" style="color:#a1a1aa">شروط الاستخدام</a></p></div>`;
+  return html
+    .replace(/<body[^>]*>/i, (m) => m + header)
+    .replace(/<\/body>/i, footer + '</body>');
+}
+
 export function isEmailConfigured() {
   return configured;
 }
@@ -32,7 +56,7 @@ export function welcomeEmail(displayName: string) {
   const safeName = escapeHtml(displayName);
   return {
     subject: 'مرحباً بك في منصة أنصار CABBA',
-    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px"><div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px"><h1>مرحباً ${safeName} 👋</h1><p>أهلاً بك في منصة أنصار شباب أهلي برج بوعريريج.</p><p>حسابك أصبح جاهزاً. يمكنك متابعة الأخبار، المباريات، المجتمع ومحتوى النادي من مكان واحد.</p><p><a href="${escapeHtml(env.appBaseUrl)}" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">فتح منصة CABBA</a></p><p style="color:#71717a">إذا لم تنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة.</p></div></body></html>`,
+    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif;background:#0d0d0d;padding:24px"><div style="max-width:620px;margin:auto;border-radius:16px;overflow:hidden;background:#ffffff"><div style="background:#f5c400;padding:16px;text-align:center"><img src="${env.appBaseUrl}/icon-192.png" width="56" height="56" alt="CABBA" style="border-radius:50%;display:inline-block" /><p style="margin:8px 0 0;color:#111;font-weight:800;font-size:16px">نادي شباب أهلي برج بوعريريج (CABBA)</p></div><div style="padding:28px"><h1>مرحباً ${safeName} 👋</h1><p>أهلاً بك في منصة أنصار شباب أهلي برج بوعريريج.</p><p>حسابك أصبح جاهزاً. يمكنك متابعة الأخبار، المباريات، المجتمع ومحتوى النادي من مكان واحد.</p><p><a href="${escapeHtml(env.appBaseUrl)}" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">فتح منصة CABBA</a></p><p style="color:#71717a">إذا لم تنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة.</p></div><div style="background:#111111;color:#9ca3af;padding:14px 22px;font-size:11px;line-height:1.8">ملعب 20 أوت 1955 — برج بوعريريج · <a href="${env.appBaseUrl}" style="color:#f5c400;text-decoration:none">فتح منصة الأنصار</a><br/>رسالة آلية من منصة الأنصار الرسمية — سياسة الخصوصية وشروط الاستخدام داخل التطبيق (الملف الشخصي).</div></div></body></html>`,
   };
 }
 
@@ -51,9 +75,12 @@ export interface OrderEmailItem {
 }
 
 const ORDER_HTML_SHELL = (inner: string) =>
-  `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px">` +
-  `<div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px">${inner}</div>` +
-  `</body></html>`;
+  `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif;background:#0d0d0d;padding:24px">` +
+  `<div style="max-width:620px;margin:auto;border-radius:16px;overflow:hidden;background:#ffffff">` +
+  `<div style="background:#f5c400;padding:16px;text-align:center"><img src="${env.appBaseUrl}/icon-192.png" width="56" height="56" alt="CABBA" style="border-radius:50%;display:inline-block" /><p style="margin:8px 0 0;color:#111;font-weight:800;font-size:16px">نادي شباب أهلي برج بوعريريج (CABBA)</p></div>` +
+  `<div style="padding:28px">${inner}</div>` +
+  `<div style="background:#111111;color:#9ca3af;padding:14px 22px;font-size:11px;line-height:1.8">ملعب 20 أوت 1955 — برج بوعريريج · <a href="${env.appBaseUrl}" style="color:#f5c400;text-decoration:none">فتح منصة الأنصار</a><br/>رسالة آلية من منصة الأنصار الرسمية — سياسة الخصوصية وشروط الاستخدام داخل التطبيق (الملف الشخصي).</div>` +
+  `</div></body></html>`;
 
 /** Référence courte lisible : les 8 premiers caractères de l'UUID. */
 function shortRef(orderId: string): string {
@@ -107,11 +134,12 @@ export function passwordResetEmail(displayName: string, resetUrl: string) {
   const safeUrl = escapeHtml(resetUrl);
   return {
     subject: 'استعادة كلمة المرور — منصة أنصار CABBA',
-    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Arial,sans-serif;background:#f4f4f5;padding:24px"><div style="max-width:620px;margin:auto;background:white;border-radius:16px;padding:32px"><h1>استعادة كلمة المرور 🔑</h1><p>مرحباً ${safeName}،</p><p>وصلنا طلب لاستعادة كلمة المرور الخاصة بحسابك في منصة أنصار الكابا. اضغط على الزر التالي لاختيار كلمة مرور جديدة:</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">إعادة تعيين كلمة المرور</a></p><p style="color:#71717a;font-size:12px">الرابط صالح لمدة 30 دقيقة ولا يمكن استعماله إلا مرة واحدة.</p><p style="color:#71717a;font-size:12px">إن لم تطلب ذلك، تجاهل هذه الرسالة — حسابك يبقى آمناً.</p><p style="color:#a1a1aa;font-size:11px;word-break:break-all" dir="ltr">${safeUrl}</p></div></body></html>`,
+    html: `<!doctype html><html lang="ar" dir="rtl"><body style="font-family:Tahoma,Arial,sans-serif;background:#0d0d0d;padding:24px"><div style="max-width:620px;margin:auto;border-radius:16px;overflow:hidden;background:#ffffff"><div style="background:#f5c400;padding:16px;text-align:center"><img src="${env.appBaseUrl}/icon-192.png" width="56" height="56" alt="CABBA" style="border-radius:50%;display:inline-block" /><p style="margin:8px 0 0;color:#111;font-weight:800;font-size:16px">نادي شباب أهلي برج بوعريريج (CABBA)</p></div><div style="padding:28px"><h1>استعادة كلمة المرور 🔑</h1><p>مرحباً ${safeName}،</p><p>وصلنا طلب لاستعادة كلمة المرور الخاصة بحسابك في منصة أنصار الكابا. اضغط على الزر التالي لاختيار كلمة مرور جديدة:</p><p><a href="${safeUrl}" style="display:inline-block;padding:12px 18px;background:#111;color:#fff;border-radius:10px;text-decoration:none">إعادة تعيين كلمة المرور</a></p><p style="color:#71717a;font-size:12px">الرابط صالح لمدة 30 دقيقة ولا يمكن استعماله إلا مرة واحدة.</p><p style="color:#71717a;font-size:12px">إن لم تطلب ذلك، تجاهل هذه الرسالة — حسابك يبقى آمناً.</p><p style="color:#a1a1aa;font-size:11px;word-break:break-all" dir="ltr">${safeUrl}</p></div><div style="background:#111111;color:#9ca3af;padding:14px 22px;font-size:11px;line-height:1.8">ملعب 20 أوت 1955 — برج بوعريريج · <a href="${env.appBaseUrl}" style="color:#f5c400;text-decoration:none">فتح منصة الأنصار</a><br/>رسالة آلية من منصة الأنصار الرسمية — سياسة الخصوصية وشروط الاستخدام داخل التطبيق (الملف الشخصي).</div></div></body></html>`,
   };
 }
 
 export async function sendEmail(input: SendEmailInput) {
+  input = { ...input, html: brandHtml(input.html) };
   if (!configured) return { sent: false, skipped: 'not_configured' as const };
 
   if (input.eventKey) {

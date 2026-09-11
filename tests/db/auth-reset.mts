@@ -79,7 +79,7 @@ after(async () => {
 test('forgot-password : réponse générique, jeton haché, expiration 30 min', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Reset Test' },
+    body: { email, password: PASSWORD, displayName: 'Reset Test', termsAccepted: true },
   });
   assert.equal(created.status, 201);
   createdIds.push(created.body.user.id);
@@ -110,7 +110,7 @@ test('forgot-password : réponse générique, jeton haché, expiration 30 min', 
 test('forgot-password : une nouvelle demande invalide le lien précédent', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Reset Test 2' },
+    body: { email, password: PASSWORD, displayName: 'Reset Test 2', termsAccepted: true },
   });
   createdIds.push(created.body.user.id);
 
@@ -127,7 +127,7 @@ test('forgot-password : une nouvelle demande invalide le lien précédent', { sk
 test('reset-password : change le mot de passe, consomme le jeton, révoque les sessions', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Reset Test 3' },
+    body: { email, password: PASSWORD, displayName: 'Reset Test 3', termsAccepted: true },
   });
   createdIds.push(created.body.user.id);
   const userId: string = created.body.user.id;
@@ -171,7 +171,7 @@ test('reset-password : change le mot de passe, consomme le jeton, révoque les s
 test('reset-password : jeton expiré refusé', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Reset Test 4' },
+    body: { email, password: PASSWORD, displayName: 'Reset Test 4', termsAccepted: true },
   });
   createdIds.push(created.body.user.id);
 
@@ -189,7 +189,7 @@ test('reset-password : jeton expiré refusé', { skip: skipReason }, async () =>
 test('reset-password : mot de passe court refusé SANS consommer le jeton', { skip: skipReason }, async () => {
   const email = uniqueEmail();
   const created = await callChain(registerChain, {
-    body: { email, password: PASSWORD, displayName: 'Reset Test 5' },
+    body: { email, password: PASSWORD, displayName: 'Reset Test 5', termsAccepted: true },
   });
   createdIds.push(created.body.user.id);
 
