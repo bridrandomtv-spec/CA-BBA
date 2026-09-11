@@ -3,6 +3,7 @@
 // du supporter, copie du code, date lisible, compteurs par porte.
 import { useCallback, useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import ClubLogo from '../ClubLogo';
 import { ChevronRight, Copy, Printer, ScanLine, Send, Ticket as TicketIcon, XCircle } from 'lucide-react';
 
 interface MatchOpt { id: string; home_team: string; away_team: string; match_date: string; }
@@ -155,6 +156,7 @@ export default function AdminTickets({ onBack }: { onBack: () => void }) {
       <div id="print-ticket" style={{ position: 'absolute', left: '-10000px', top: 0, width: '340px', background: '#ffffff', color: '#000000', padding: '24px', fontFamily: 'sans-serif' }} dir="rtl">
         {printTicket && (
           <>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}><ClubLogo size={72} /></div>
             <p style={{ textAlign: 'center', fontWeight: 800, fontSize: 18, margin: 0 }}>نادي شباب أهلي برج بوعريريج (CABBA)</p>
             <p style={{ textAlign: 'center', fontSize: 13, margin: '6px 0 0' }}>{printTicket.matchLabel ?? ''}</p>
             <div style={{ display: 'flex', justifyContent: 'center', margin: '18px 0', background: '#ffffff' }}>
