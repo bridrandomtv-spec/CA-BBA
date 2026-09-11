@@ -218,7 +218,7 @@ export default function Home({ onNavigate }: HomeProps) {
       <FanGallery />
 
       {/* المتحف — accès à la mémoire du club */}
-      <button onClick={() => onNavigate('museum')}
+      <button onClick={() => onNavigate?.('museum')}
         className="w-full bg-zinc-900 border border-yellow-500/30 rounded-2xl p-4 flex items-center gap-3 text-right hover:border-yellow-500/60 transition-colors">
         <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center flex-shrink-0">
           <Landmark size={20} className="text-yellow-500" />
