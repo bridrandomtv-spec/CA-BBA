@@ -638,5 +638,6 @@ test('كاشف الرموز المدمج — repli jsQR vendorisé quand Barcode
 test('sélecteur de match du module tickets — tolérant au tableau camelCase de /api/matches', () => {
   const at = read('src/components/admin/AdminTickets.tsx');
   assert.match(at, /Array\.isArray\(d\)/, 'accepte la forme tableau historique');
-  assert.match(at, /homeTeam ?? x.home_team/, 'accepte camelCase et snake_case');
+  assert.match(at, /x\.homeTeam/, 'lit le camelCase de la route historique');
+  assert.match(at, /x\.home_team/, 'tolère le snake_case par compatibilité');
 });
