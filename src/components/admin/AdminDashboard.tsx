@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
   Users, Newspaper, Trophy, MessageSquare, Music, CreditCard,
-  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText
+  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText, Landmark
 } from 'lucide-react';
 import AdminNews from './AdminNews';
 import AdminMatches from './AdminMatches';
@@ -26,8 +26,9 @@ import AdminTickets from './AdminTickets';
 import AdminAccounting from './AdminAccounting';
 import AdminSponsors from './AdminSponsors';
 import AdminAudit from './AdminAudit';
+import AdminMuseum from './AdminMuseum';
 
-type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support' | 'tickets' | 'accounting' | 'sponsors' | 'audit';
+type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support' | 'tickets' | 'accounting' | 'sponsors' | 'audit' | 'museum';
 
 interface AdminModule {
   id: AdminView | 'planned';
@@ -56,6 +57,7 @@ export default function AdminDashboard() {
     { id: 'accounting', key: 'accounting', title: 'المحاسبة والتقارير', icon: <Wallet size={20} />, color: 'text-sky-500', bg: 'bg-sky-500/10' },
     { id: 'sponsors', key: 'sponsors', title: 'شركاء النادي', icon: <Handshake size={20} />, color: 'text-amber-500', bg: 'bg-amber-500/10' },
     { id: 'audit', key: 'audit', title: 'سجل التدقيق والتصدير', icon: <ScrollText size={20} />, color: 'text-indigo-400', bg: 'bg-indigo-500/10' },
+    { id: 'museum', key: 'museum', title: 'المتحف والبطولات', icon: <Landmark size={20} />, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
     { id: 'analytics', key: 'analytics', title: 'التحليلات', icon: <BarChart3 size={20} />, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
     { id: 'planned', key: 'community', title: 'إدارة المجتمع', icon: <MessageSquare size={20} />, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
     { id: 'planned', key: 'settings', title: 'إعدادات النظام', icon: <Settings size={20} />, color: 'text-zinc-400', bg: 'bg-zinc-800' },
@@ -116,6 +118,7 @@ export default function AdminDashboard() {
       {activeView === 'accounting' && <AdminAccounting onBack={() => setActiveView('menu')} />}
       {activeView === 'sponsors' && <AdminSponsors onBack={() => setActiveView('menu')} />}
       {activeView === 'audit' && <AdminAudit onBack={() => setActiveView('menu')} />}
+      {activeView === 'museum' && <AdminMuseum onBack={() => setActiveView('menu')} />}
       {activeView === 'analytics' && <AdminAnalytics onBack={() => setActiveView('menu')} />}
     </div>
   );
