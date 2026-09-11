@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, CameraOff, CheckCircle2, ScanLine, XCircle } from 'lucide-react';
 // Décodeur QR vendorisé (MIT, dans le bundle) : repli universel quand
 // BarcodeDetector est absent (Safari/iOS, anciens Chrome). CSP intacte.
-import jsQR from '../lib/vendor/jsQR.js';
+import jsQR from '../lib/vendor/jsQR.esm.js';
 
 interface Flash { kind: 'ok' | 'reject'; title: string; detail: string; entries?: number; }
 
