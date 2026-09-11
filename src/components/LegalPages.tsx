@@ -1,7 +1,8 @@
 // الصفحات القانونية — سياسة الخصوصية وشروط الاستخدام (قانون 18-07).
 // عامة (قبل تسجيل الدخول) : رابطاها يظهران في التسجيل وفي كل بريد.
 import { useEffect, useState } from 'react';
-import { ChevronRight, FileText, ShieldCheck } from 'lucide-react';
+import { ChevronRight, FileText } from 'lucide-react';
+import ClubLogo from './ClubLogo';
 
 type Page = 'privacy' | 'terms';
 
@@ -38,9 +39,7 @@ export default function LegalPages() {
       </button>
 
       <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-2xl bg-yellow-500 flex items-center justify-center flex-shrink-0">
-          <ShieldCheck size={24} className="text-black" />
-        </div>
+        <ClubLogo size={48} />
         <div>
           <h2 className="text-white font-black text-lg">الوثائق القانونية</h2>
           <p className="text-zinc-500 text-[11px]">نادي شباب أهلي برج بوعريريج (CABBA) — آخر تحديث : 2026-09-12</p>
