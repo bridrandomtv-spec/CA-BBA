@@ -2,6 +2,7 @@
 // (/api/news) et classement (/api/football/team-summary). L'ancien composant
 // affichait « البيانات غير متوفرة » en dur alors que les routes PostgreSQL
 // existent. Les trois chargements sont indépendants (Promise.allSettled).
+import SponsorsStrip from './SponsorsStrip';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin } from 'lucide-react';
 import { Match, NewsItem } from '../types';
@@ -275,6 +276,9 @@ export default function Home({ onNavigate }: HomeProps) {
           </div>
         </div>
       )}
+
+      {/* شركاء النادي — sponsors actifs gérés depuis لوحة الإدارة */}
+      <SponsorsStrip />
 
       {/* News Section — alimentée par /api/news (PostgreSQL) */}
       <div>
