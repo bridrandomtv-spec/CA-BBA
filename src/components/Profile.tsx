@@ -7,6 +7,7 @@ import { Match } from '../types';
 import NotificationSettings from './NotificationSettings';
 import Achievements from './Achievements';
 import { QRCodeSVG } from 'qrcode.react';
+import MyTickets from './MyTickets';
 import { useTheme } from '../ThemeContext';
 import { clearAnalyticsConsent, getAnalyticsConsent } from '../lib/consent';
 
@@ -391,34 +392,8 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Digital Tickets */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-white text-lg">التذاكر الرقمية</h3>
-          <span className="text-xs text-green-500 font-bold bg-green-500/10 px-2 py-1 rounded-md border border-green-500/20">تذكرة واحدة نشطة</span>
-        </div>
-        
-        <div className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 flex flex-col items-center">
-          <div className="flex justify-between items-center w-full mb-4">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm">الكابا</span>
-            </div>
-            <span className="text-zinc-500 text-xs font-bold px-2">ضد</span>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-sm">المنافس</span>
-            </div>
-          </div>
-          
-          <div className="p-3 rounded-xl mb-4 shadow-[0_0_15px_rgba(255,255,255,0.1)]" style={{ backgroundColor: "#ffffff" }}>
-            <QRCodeSVG value="TICKET-78X92" size={96} />
-          </div>
-          
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-xs text-zinc-400">ملعب 20 أوت 1955</span>
-            <span className="font-bold text-yellow-500 text-sm tracking-widest">TICKET-78X92</span>
-          </div>
-        </div>
-      </div>
+      {/* تذاكري — tickets réellement liées au compte (owner_id) */}
+      <MyTickets />
 
       {/* Favorite Matches */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm">
