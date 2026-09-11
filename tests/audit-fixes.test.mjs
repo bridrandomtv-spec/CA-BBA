@@ -658,3 +658,20 @@ test('شباك التذاكر v2 — طباعة، إرسال للحساب، تذ
   assert.doesNotMatch(prof, /TICKET-78X92/, 'placeholder mort remplacé par les vrais tickets');
   assert.ok(exists('src/components/MyTickets.tsx'));
 });
+
+test('module comptabilité — agrégats sur pièces (billets, dons, boutique), CSV et impression', () => {
+  const acc = read('server/api/accounting.ts');
+  assert.match(acc, /requireAdmin/);
+  assert.match(acc, /support_donations/, 'les dons viennent du registre');
+  assert.match(acc, /FROM orders/, 'la boutique vient des commandes');
+  assert.match(acc, /FROM tickets/, 'la billetterie vient du registre tickets');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/accounting", accountingRouter\)/);
+  const ui = read('src/components/admin/AdminAccounting.tsx');
+  assert.match(ui, /text\/csv/, 'export CSV Excel arabe (BOM)');
+  assert.match(ui, /window\.print\(\)/, 'état financier imprimable');
+  assert.match(ui, /print-accounting/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /المحاسبة والتقارير/);
+  assert.ok(exists('src/components/admin/AdminAccounting.tsx'));
+});
