@@ -767,7 +767,7 @@ test('المتحف — mémoire officielle publique + CRUD admin (programme 4/8)
   const app = read('src/App.tsx');
   assert.match(app, /case 'museum'/);
   const home = read('src/components/Home.tsx');
-  assert.match(home, /onNavigate\('museum'\)/, 'accès depuis l accueil');
+  assert.match(home, /onNavigate\?\.\('museum'\)/, 'accès depuis l accueil (appel sûr)');
   const view = read('src/components/Museum.tsx');
   assert.match(view, /entries\.length === 0/);
   const dash = read('src/components/admin/AdminDashboard.tsx');
