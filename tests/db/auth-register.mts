@@ -109,14 +109,14 @@ const userCount = async () => (await query<{ n: number }>('SELECT count(*)::int 
 
 test('les entrées invalides sont refusées sans rien écrire en base', { skip: skipReason }, async () => {
   const LONG_NAME = 'a'.repeat(101);
-  const valid = { email: uniqueEmail(), password: PASSWORD, displayName: 'Supporter Test' };
+  const valid = { email: uniqueEmail(), password: PASSWORD, displayName: 'Supporter Test', termsAccepted: true };
 
   const cases: Array<{ label: string; body: unknown; status: number }> = [
     { label: 'corps vide', body: {}, status: 400 },
-    { label: 'champs non-string', body: { email: 123, password: PASSWORD, displayName: 'Test' }, status: 400 },
+    { label: 'champs non-string', body: { email: 123, password: PASSWORD, displayName: 'Test', termsAccepted: true }, status: 400 },
     { label: 'email sans arobase', body: { ...valid, email: 'pas-un-email' }, status: 400 },
     { label: 'mot de passe trop court', body: { ...valid, password: 'court' }, status: 400 },
-    { label: 'nom réduit à des espaces', body: { ...valid, displayName: '   ' }, status: 400 },
+    { label: 'nom réduit à des espaces', body: { ...valid, displayName: '   ', termsAccepted: true }, status: 400 },
     { label: 'nom de plus de 100 caractères', body: { ...valid, displayName: LONG_NAME }, status: 400 },
   ];
 
@@ -174,11 +174,11 @@ test("l'inscription crée un utilisateur standard, normalise l'email et ignore u
 
 test('un email déjà inscrit est refusé avec 409', { skip: skipReason }, async () => {
   const email = uniqueEmail();
-  const first = await call(register, { email, password: PASSWORD, displayName: 'Supporter Test' });
+  const first = await call(register, { email, password: PASSWORD, displayName: 'Supporter Test', termsAccepted: true });
   assert.equal(first.status, 201);
   createdIds.push(first.body.user.id);
 
-  const second = await call(register, { email, password: PASSWORD, displayName: 'Autre Nom' });
+  const second = await call(register, { email, password: PASSWORD, displayName: 'Autre Nom', termsAccepted: true });
   assert.equal(second.status, 409);
   assert.equal(second.cookies.length, 0);
 
@@ -188,7 +188,7 @@ test('un email déjà inscrit est refusé avec 409', { skip: skipReason }, async
 
 test('le compte créé peut se connecter, y compris avec un email mal saisi', { skip: skipReason }, async () => {
   const email = uniqueEmail();
-  const created = await call(register, { email, password: PASSWORD, displayName: 'Supporter Test' });
+  const created = await call(register, { email, password: PASSWORD, displayName: 'Supporter Test', termsAccepted: true });
   assert.equal(created.status, 201);
   createdIds.push(created.body.user.id);
 
