@@ -602,3 +602,25 @@ test('صندوق دعم النادي — campagne réelle administrable (bloc mo
   assert.match(dash, /إدارة صندوق الدعم/);
   assert.ok(exists('src/components/admin/AdminSupport.tsx'));
 });
+
+test('مراقبة التذاكر الإلكترونية — scanneur mobile, usage unique, journal anti-fraude', () => {
+  assert.ok(migrations().some((f) => f.includes('020_tickets')));
+  const tickets = read('server/api/tickets.ts');
+  assert.match(tickets, /status='used'/, 'verrou anti-double-entrée');
+  assert.match(tickets, /ticket_scans/, 'journal de chaque passage');
+  assert.match(tickets, /requireAdmin/);
+  assert.match(tickets, /scanner/);
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/tickets", ticketsRouter\)/);
+  const users = read('server/api/users.ts');
+  assert.match(users, /'scanner'/, 'rôle agent de porte');
+  const app = read('src/App.tsx');
+  assert.match(app, /case 'scanner'/);
+  const scan = read('src/components/TicketScanner.tsx');
+  assert.match(scan, /BarcodeDetector/);
+  assert.match(scan, /AudioContext/);
+  assert.match(scan, /vibrate/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /التذاكر والمراقبة/);
+  assert.ok(exists('src/components/admin/AdminTickets.tsx'));
+});

@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
   Users, Newspaper, Trophy, MessageSquare, Music, CreditCard,
-  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart
+  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket
 } from 'lucide-react';
 import AdminNews from './AdminNews';
 import AdminMatches from './AdminMatches';
@@ -22,8 +22,9 @@ import AdminMemberships from './AdminMemberships';
 import AdminAnalytics from './AdminAnalytics';
 import AdminPolls from './AdminPolls';
 import AdminSupport from './AdminSupport';
+import AdminTickets from './AdminTickets';
 
-type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support';
+type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support' | 'tickets';
 
 interface AdminModule {
   id: AdminView | 'planned';
@@ -48,6 +49,7 @@ export default function AdminDashboard() {
     { id: 'videos', key: 'videos', title: 'إدارة الفيديوهات', icon: <Video size={20} />, color: 'text-red-500', bg: 'bg-red-500/10' },
     { id: 'polls', key: 'polls', title: 'إدارة الاستطلاعات', icon: <ListChecks size={20} />, color: 'text-orange-500', bg: 'bg-orange-500/10' },
     { id: 'support', key: 'support', title: 'إدارة صندوق الدعم', icon: <Heart size={20} />, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+    { id: 'tickets', key: 'tickets', title: 'التذاكر والمراقبة', icon: <Ticket size={20} />, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
     { id: 'analytics', key: 'analytics', title: 'التحليلات', icon: <BarChart3 size={20} />, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
     { id: 'planned', key: 'community', title: 'إدارة المجتمع', icon: <MessageSquare size={20} />, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
     { id: 'planned', key: 'settings', title: 'إعدادات النظام', icon: <Settings size={20} />, color: 'text-zinc-400', bg: 'bg-zinc-800' },
@@ -104,6 +106,7 @@ export default function AdminDashboard() {
       {activeView === 'memberships' && <AdminMemberships onBack={() => setActiveView('menu')} />}
       {activeView === 'polls' && <AdminPolls onBack={() => setActiveView('menu')} />}
       {activeView === 'support' && <AdminSupport onBack={() => setActiveView('menu')} />}
+      {activeView === 'tickets' && <AdminTickets onBack={() => setActiveView('menu')} />}
       {activeView === 'analytics' && <AdminAnalytics onBack={() => setActiveView('menu')} />}
     </div>
   );

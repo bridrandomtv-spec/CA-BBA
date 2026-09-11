@@ -43,9 +43,10 @@ const OnboardingCarousel = lazy(() => import('./components/OnboardingCarousel'))
 const MatchAlert = lazy(() => import('./components/MatchAlert'));
 const NotificationCenter = lazy(() => import('./components/NotificationCenter'));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const TicketScanner = lazy(() => import('./components/TicketScanner'));
 
 /** Routes par hash : `#/store` partagé ouvre directement le bon écran. */
-const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin'];
+const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner'];
 
 function tabFromHash(): Tab | null {
   const raw = window.location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -151,6 +152,7 @@ export default function App() {
       // `#/admin` partagé par un non-admin retombe sur Home : la garde de
       // rôle reste côté rendu (et côté serveur via requireAdmin).
       case 'admin': return userData?.role === 'admin' ? <AdminDashboard /> : <Home onNavigate={setActiveTab} />;
+      case 'scanner': return (userData?.role === 'admin' || userData?.role === 'scanner') ? <TicketScanner /> : <Home onNavigate={setActiveTab} />;
       default: return <Home onNavigate={setActiveTab} />;
     }
   };

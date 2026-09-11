@@ -1,4 +1,4 @@
-export type Tab = 'home' | 'match' | 'chants' | 'tv' | 'store' | 'profile' | 'community' | 'admin';
+export type Tab = 'home' | 'match' | 'chants' | 'tv' | 'store' | 'profile' | 'community' | 'admin' | 'scanner';
 
 export interface ChatMessage {
   id: string;
@@ -81,6 +81,6 @@ export interface AppUser {
   email: string;
   displayName: string;
   avatarUrl?: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'scanner';
   createdAt?: string;
 }

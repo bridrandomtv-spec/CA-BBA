@@ -13,7 +13,7 @@ usersRouter.get('/', requireAdmin, async (_req,res) => {
 
 usersRouter.patch('/:id/role', requireAdmin, async (req,res) => {
   const role=req.body?.role;
-  if (!['user','admin'].includes(role)) { res.status(400).json({error:'Invalid role'}); return; }
+  if (!['user','admin','scanner'].includes(role)) { res.status(400).json({error:'Invalid role'}); return; }
   if (req.params.id===req.user!.id) { res.status(400).json({error:'Vous ne pouvez pas modifier votre propre rôle.'}); return; }
   try {
     const result=await query('UPDATE users SET role=$1,updated_at=NOW() WHERE id=$2 RETURNING id,role',[role,req.params.id]);
