@@ -12,6 +12,7 @@
 import { Router, Request, Response } from 'express';
 import { query } from '../db/index.js';
 import { requireAdmin } from '../auth.js';
+import { sendMonthlyReport } from '../reporting.js';
 
 export const accountingRouter = Router();
 
@@ -134,6 +135,25 @@ accountingRouter.get('/summary', requireAdmin, async (req: Request, res: Respons
     });
   } catch (error) {
     console.error('[CABBA] accounting summary:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Envoi manuel du rapport mensuel (admin) : même moteur que l'automatique. */
+accountingRouter.post('/report/send', requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const year = req.body?.year ? Number(req.body.year) : target.getFullYear();
+    const month = req.body?.month ? Number(req.body.month) : target.getMonth() + 1;
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+      res.status(400).json({ error: 'شهر غير صالح.' });
+      return;
+    }
+    const result = await sendMonthlyReport(year, month);
+    res.json({ sent: true, skipped: (result as { skipped?: string } | null)?.skipped ?? null });
+  } catch (error) {
+    console.error('[CABBA] report send:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

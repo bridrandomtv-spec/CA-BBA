@@ -2,7 +2,7 @@
 // billets du guichet, registre des dons, commandes boutique, adhésions.
 // Export CSV (Excel arabe) + impression d'un état signé-able.
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronRight, Download, Printer, Wallet } from 'lucide-react';
+import { ChevronRight, Download, Printer, Send, Wallet } from 'lucide-react';
 import ClubLogo from '../ClubLogo';
 
 interface Summary {
@@ -43,6 +43,7 @@ export default function AdminAccounting({ onBack }: { onBack: () => void }) {
   const [period, setPeriod] = useState('month');
   const [data, setData] = useState<Summary | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [busyReport, setBusyReport] = useState(false);
 
   const load = useCallback(async () => {
     const { from, to } = periodBounds(period);
@@ -85,6 +86,23 @@ export default function AdminAccounting({ onBack }: { onBack: () => void }) {
     a.download = `cabba-comptabilite-${period}-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
+  };
+
+  const sendReport = async () => {
+    setBusyReport(true);
+    try {
+      const res = await fetch('/api/accounting/report/send', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof d.error === 'string' ? d.error : 'تعذر الإرسال');
+      setNotice('أُرسل التقرير الشهري إلى بريد الإدارة (والنسخة التلقائية تبقى مبرمجة أول الشهر).');
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'تعذر الإرسال');
+    } finally {
+      setBusyReport(false);
+    }
   };
 
   const card = "bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center";
@@ -148,6 +166,10 @@ export default function AdminAccounting({ onBack }: { onBack: () => void }) {
         <button onClick={() => window.print()} disabled={!data}
           className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold px-3 py-2 rounded-lg disabled:opacity-50">
           <Printer size={14} /> طباعة الحالة
+        </button>
+        <button onClick={() => void sendReport()} disabled={!data || busyReport}
+          className="flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-black text-xs font-bold px-3 py-2 rounded-lg disabled:opacity-50">
+          <Send size={14} /> إرسال التقرير الآن
         </button>
       </div>
 

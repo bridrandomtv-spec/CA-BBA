@@ -4,6 +4,7 @@ import { footballQuotaStatus } from './client.js';
 import { syncCompetitionFixtures, syncFixture, syncFixtureEvents, syncFixtureLineups, syncFixtureStatistics, syncStandings } from './sync.js';
 import { getCompetitionCoverage } from './coverage.js';
 import { broadcastPush } from '../notifications.js';
+import { maybeSendMonthlyReport } from '../reporting.js';
 
 const LIVE_INTERVAL_MS = 180_000;       // 3 min: protects the 100/day free quota.
 const EVENTS_INTERVAL_MS = 360_000;     // 6 min while live.
@@ -14,6 +15,7 @@ const PUSH_REMINDER_INTERVAL_MS = 5 * 60_000;
 let timer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 let reminderTimer: ReturnType<typeof setInterval> | null = null;
+let reportTimer: ReturnType<typeof setInterval> | null = null;
 
 // Cadence is tracked per fixture, not globally: two simultaneous CABBA matches
 // must each receive their own events/statistics refresh when applicable.
@@ -177,9 +179,12 @@ export function startFootballScheduler() {
   void tick();
   void sendUpcomingMatchReminders();
   reminderTimer = setInterval(() => void sendUpcomingMatchReminders(), PUSH_REMINDER_INTERVAL_MS);
+  // Rapport mensuel : vérification horaire, envoi le 1er du mois ≥ 9 h (dédupliqué).
+  reportTimer = setInterval(() => void maybeSendMonthlyReport(), 60 * 60_000);
 }
 
 export function stopFootballScheduler() {
+  if (reportTimer) { clearInterval(reportTimer); reportTimer = null; }
   if (timer) clearTimeout(timer);
   timer = null;
   lastEventsAt.clear();
