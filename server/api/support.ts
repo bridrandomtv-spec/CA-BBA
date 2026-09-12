@@ -184,6 +184,14 @@ supportRouter.post('/campaign/:id/donations', requireAdmin, async (req: Request,
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
       [req.params.id, cleanAmount, cleanDonor, cleanMethod, cleanNote, req.user!.id],
     );
+    // Don CCP/virement : pièce de paiement en file de validation admin
+    if (cleanMethod === 'ccp' || cleanMethod === 'transfer') {
+      await query(
+        `INSERT INTO payments (kind, ref_id, method, bank_ref, amount, payer_name)
+         VALUES ('donation', $1, 'ccp', '', $2, $3)`,
+        [inserted.rows[0].id, cleanAmount, cleanDonor],
+      ).catch((err) => console.error('[CABBA] payment donation:', err));
+    }
     const { raised, count } = await raisedTotal(String(req.params.id));
     res.status(201).json({
       donation: {
