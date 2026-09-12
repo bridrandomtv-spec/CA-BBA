@@ -4,7 +4,7 @@
 // existent. Les trois chargements sont indépendants (Promise.allSettled).
 import SponsorsStrip from './SponsorsStrip';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark}, GraduationCap from 'lucide-react';
+import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark, GraduationCap } from 'lucide-react';
 import { Match, NewsItem } from '../types';
 import { fetchTeamSummary, EMPTY_TEAM_SUMMARY, type TeamSummary } from '../lib/teamSummary';
 import TeamStats from './TeamStats';
