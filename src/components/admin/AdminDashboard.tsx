@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
   Users, Newspaper, Trophy, MessageSquare, Music, CreditCard,
-  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText, Landmark, GraduationCap, Bus, CreditCard
+  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText, Landmark, GraduationCap, Bus
 } from 'lucide-react';
 import AdminNews from './AdminNews';
 import AdminMatches from './AdminMatches';
