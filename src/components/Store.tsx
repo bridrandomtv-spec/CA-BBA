@@ -58,6 +58,40 @@ export default function Store() {
   const cartTotal = cart.reduce((total, item) => total + item.product.price * item.quantity, 0);
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
 
+  const [payFor, setPayFor] = useState<{ id: string; total: number } | null>(null);
+  const [payMethod, setPayMethod] = useState('ccp');
+  const [bankRef, setBankRef] = useState('');
+  const [payerName, setPayerName] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
+  const [ccpInfo, setCcpInfo] = useState<{ ccp: string; holder: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/payments/config', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => { if (cfg) setCcpInfo(cfg); })
+      .catch(() => undefined);
+  }, []);
+
+  const declarePayment = async () => {
+    if (!payFor) return;
+    setPayBusy(true);
+    try {
+      const res = await fetch('/api/payments/declare', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'order', refId: payFor.id, method: payMethod, bankRef, payerName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'تعذر تصريح الدفع');
+      setNotice({ kind: 'success', text: 'سُجّل تصريح الدفع — يؤكده الإداري بعد التحقق من الحساب.' });
+      setPayFor(null); setBankRef(''); setPayerName('');
+    } catch (error: any) {
+      setNotice({ kind: 'error', text: (typeof error?.message === 'string' && error.message) || 'تعذر تصريح الدفع' });
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
   const handleCheckout = async () => {
     if (!currentUser) {
       setNotice({ kind: 'error', text: 'يجب تسجيل الدخول لإتمام الطلب' });
@@ -76,13 +110,14 @@ export default function Store() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : 'حدث خطأ أثناء إتمام الطلب');
+      setPayFor({ id: data.order?.id ?? data.id, total: cartTotal });
       setCart([]);
       setIsCartOpen(false);
       setProducts((prev) => prev.map((p) => {
         const bought = cart.find((item) => item.product.id === p.id);
         return bought ? { ...p, stock: Math.max(0, (p.stock ?? 0) - bought.quantity) } : p;
       }));
-      setNotice({ kind: 'success', text: 'تم تقديم طلبك بنجاح!' });
+      setNotice({ kind: 'success', text: 'تم إنشاء الطلب — أكمل تصريح الدفع أدناه.' });
     } catch (error: any) {
       console.error('Checkout error:', error);
       setNotice({ kind: 'error', text: (typeof error?.message === 'string' && error.message) || 'حدث خطأ أثناء إتمام الطلب' });
@@ -93,6 +128,41 @@ export default function Store() {
 
   return (
     <div className="p-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full relative" dir="rtl">
+      {payFor && (
+        <div className="bg-zinc-900 border border-yellow-500/40 rounded-2xl p-4 space-y-3" dir="rtl">
+          <h3 className="text-white font-bold text-sm">تصريح الدفع — الطلب بمبلغ {payFor.total.toLocaleString('ar-DZ')} د.ج</h3>
+          {ccpInfo?.ccp && (
+            <p className="text-[11px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-xl p-3 leading-relaxed">
+              حوّل المبلغ عبر <b className="text-yellow-400">BaridiMob / CCP</b> إلى الحساب :
+              <span className="font-mono text-yellow-400"> {ccpInfo.ccp} </span>
+              ({ccpInfo.holder}) ثم أدخل مرجع العملية أدناه.
+            </p>
+          )}
+          <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}
+            className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm text-white">
+            <option value="ccp" className="bg-zinc-900">تحويل CCP / BaridiMob</option>
+            <option value="cash" className="bg-zinc-900">نقداً عند الاستلام</option>
+            <option value="cod_cib" className="bg-zinc-900">بطاقة CIB عند التسليم</option>
+          </select>
+          {payMethod === 'ccp' && (
+            <>
+              <input value={bankRef} onChange={(e) => setBankRef(e.target.value)} maxLength={64}
+                placeholder="مرجع عملية BaridiMob (رقم العملية)"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm text-white placeholder:text-zinc-600" />
+              <input value={payerName} onChange={(e) => setPayerName(e.target.value)} maxLength={120}
+                placeholder="اسم صاحب الحساب"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-xl p-3 text-sm text-white placeholder:text-zinc-600" />
+            </>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => void declarePayment()} disabled={payBusy}
+              className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+              تصريح الدفع
+            </button>
+            <button onClick={() => setPayFor(null)} className="px-4 bg-zinc-800 text-zinc-300 text-sm rounded-xl">لاحقاً</button>
+          </div>
+        </div>
+      )}
       {/* Header Tabs */}
       <div className="flex p-1 bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm relative z-10">
         <button
