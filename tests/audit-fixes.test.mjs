@@ -809,3 +809,16 @@ test('تنقلات الأنصار — bus matchs extérieurs, réservation 1-6, 
   assert.ok(exists('src/components/Trips.tsx'));
   assert.ok(exists('src/components/admin/AdminTrips.tsx'));
 });
+
+test('التقرير الشهري التلقائي — compile + envoi direction le 1er du mois (programme 8/8)', () => {
+  const rep = read('server/reporting.ts');
+  assert.match(rep, /buildMonthStats/, 'compilation des stats du mois');
+  assert.match(rep, /eventKey/, 'déduplication par event_key email_log');
+  assert.match(rep, /now\.getDate\(\) !== 1 \|\| now\.getHours\(\) < 9/, 'garde 1er du mois 9 h');
+  const sched = read('server/football/scheduler.ts');
+  assert.match(sched, /maybeSendMonthlyReport/, 'tick horaire du worker');
+  const acc = read('server/api/accounting.ts');
+  assert.match(acc, /\/report\/send/, 'envoi manuel admin');
+  const ui = read('src/components/admin/AdminAccounting.tsx');
+  assert.match(ui, /إرسال التقرير الآن/, 'bouton dans le module comptabilité');
+});
