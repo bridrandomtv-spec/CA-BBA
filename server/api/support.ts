@@ -35,7 +35,7 @@ const mapCampaign = (row: any, raised: number, count: number) => ({
 });
 
 /** Campagne active la plus récente — celle affichée sur l'accueil. */
-supportRouter.get('/campaign', requireAuth, async (req: Request, res: Response): Promise<void> => {
+supportRouter.get('/campaign', async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await query(
       `SELECT * FROM support_campaigns WHERE active = true

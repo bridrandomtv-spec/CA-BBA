@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { addPoints } from '../loyaltyLog.js';
 import { query, pool } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { createRateLimiter } from '../rateLimit.js';
@@ -167,10 +166,12 @@ storeRouter.post('/orders', requireAuth, orderRateLimit, async (req: Request, re
       );
     }
     await client.query('COMMIT');
-    if (status === 'confirmed') {
-      const ownerRow = await query('SELECT user_id FROM orders WHERE id=$1', [orderId]);
-      if (ownerRow.rows.length) void addPoints(ownerRow.rows[0].user_id, 10, 'order', orderId);
-    }
+    // Les +10 points fidélité sont crédités à la confirmation du paiement
+    // (server/api/payments.ts). Une commande neuve est 'pending' : l'ancien
+    // bloc `if (status === …)` référençait une variable inexistante sous
+    // Node (ReferenceError) APRÈS le COMMIT → 500 systématique sur POST
+    // /api/store/orders : commande créée, stock décrémenté, panier jamais
+    // vidé, panneau de paiement jamais ouvert.
     res.status(201).json({ order: { ...mapOrder(orderResult.rows[0]), items: lockedItems } });
 
     // Confirmation de commande — asynchrone et best-effort : une panne Resend
