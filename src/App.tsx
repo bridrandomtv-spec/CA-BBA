@@ -24,6 +24,7 @@ import {
   Bell, Bot, X,
   Home as HomeIcon, Trophy, Tv, Music, ShoppingBag, Users, User as UserIcon, ShieldAlert,
   Landmark,
+  Bus,
 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import Login from './components/auth/Login';
@@ -48,10 +49,11 @@ const TicketScanner = lazy(() => import('./components/TicketScanner'));
 const LegalPages = lazy(() => import('./components/LegalPages'));
 const Museum = lazy(() => import('./components/Museum'));
 const AcademyForm = lazy(() => import('./components/AcademyForm'));
+const Trips = lazy(() => import('./components/Trips'));
 import ClubLogo from './components/ClubLogo';
 
 /** Routes par hash : `#/store` partagé ouvre directement le bon écran. */
-const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner', 'legal', 'museum', 'academy'];
+const TAB_ROUTES: Tab[] = ['home', 'match', 'chants', 'tv', 'store', 'profile', 'community', 'admin', 'scanner', 'legal', 'museum', 'academy', 'trips'];
 
 function tabFromHash(): Tab | null {
   const raw = window.location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -68,6 +70,7 @@ const DESKTOP_NAV: Array<{ tab: Tab; label: string; icon: LucideIcon }> = [
   { tab: 'community', label: 'المجتمع', icon: Users },
   { tab: 'profile', label: 'الملف الشخصي', icon: UserIcon },
   { tab: 'museum', label: 'المتحف', icon: Landmark },
+  { tab: 'trips', label: 'التنقلات', icon: Bus },
 ];
 
 function ScreenFallback() {
@@ -162,6 +165,7 @@ export default function App() {
       case 'legal': return <LegalPages />;
       case 'museum': return <Museum />;
       case 'academy': return <AcademyForm />;
+      case 'trips': return <Trips />;
       default: return <Home onNavigate={setActiveTab} />;
     }
   };
