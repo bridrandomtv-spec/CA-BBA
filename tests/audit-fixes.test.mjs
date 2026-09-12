@@ -774,3 +774,20 @@ test('المتحف — mémoire officielle publique + CRUD admin (programme 4/8)
   assert.match(dash, /المتحف والبطولات/);
   assert.ok(exists('src/components/admin/AdminMuseum.tsx'));
 });
+
+test('مدرسة الكرة — inscription publique U7-U17 + gestion admin (programme 6/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('027_academy')));
+  const ac = read('server/api/academy.ts');
+  assert.match(ac, /requireAdmin/);
+  assert.match(ac, /U17/, 'catégories U7 à U17');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/academy", academyRouter\)/);
+  const app = read('src/App.tsx');
+  assert.match(app, /case 'academy'/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /onNavigate\?\.\('academy'\)/, 'carte d accès accueil');
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /مدرسة الكرة/);
+  assert.ok(exists('src/components/admin/AdminAcademy.tsx'));
+  assert.ok(exists('src/components/AcademyForm.tsx'));
+});
