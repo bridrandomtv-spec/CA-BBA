@@ -8,6 +8,7 @@ import NotificationSettings from './NotificationSettings';
 import Achievements from './Achievements';
 import { QRCodeSVG } from 'qrcode.react';
 import MyTickets from './MyTickets';
+import LoyaltyCard from './LoyaltyCard';
 import { useTheme } from '../ThemeContext';
 import { clearAnalyticsConsent, getAnalyticsConsent } from '../lib/consent';
 
@@ -394,6 +395,7 @@ export default function Profile() {
 
       {/* تذاكري — tickets réellement liées au compte (owner_id) */}
       <MyTickets />
+      <LoyaltyCard />
 
       {/* Favorite Matches */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-sm">

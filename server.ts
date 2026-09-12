@@ -30,6 +30,7 @@ import { accountingRouter } from "./server/api/accounting.js";
 import { sponsorsRouter } from "./server/api/sponsors.js";
 import { auditRouter } from "./server/api/audit.js";
 import { museumRouter } from "./server/api/museum.js";
+import { loyaltyRouter } from "./server/api/loyalty.js";
 import { academyRouter } from "./server/api/academy.js";
 import { tripsRouter } from "./server/api/trips.js";
 import { startFootballScheduler, stopFootballScheduler } from "./server/football/scheduler.js";
@@ -115,6 +116,7 @@ app.use("/api/accounting", accountingRouter);
 app.use("/api/sponsors", sponsorsRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/museum", museumRouter);
+app.use("/api/loyalty", loyaltyRouter);
 app.use("/api/academy", academyRouter);
 app.use("/api/trips", tripsRouter);
 
