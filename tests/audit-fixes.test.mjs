@@ -828,3 +828,25 @@ test('montage /api/loyalty servi (garde-fou fusion)', () => {
   assert.match(server, /import \{ loyaltyRouter \} from "\.\/server\/api\/loyalty\.js";/);
   assert.match(server, /app\.use\("\/api\/loyalty", loyaltyRouter\);/);
 });
+
+test('paiements CCP/BaridiMob — déclaration par référence, file de validation, passerelle future', () => {
+  assert.ok(migrations().some((f) => f.includes('029_payments')));
+  const pay = read('server/api/payments.ts');
+  assert.match(pay, /requireAdmin/);
+  assert.match(pay, /requireAuth/);
+  assert.match(pay, /bank_ref/, 'référence de l opération BaridiMob conservée');
+  assert.match(pay, /loyalty_ledger WHERE reason='order' AND ref=/, 'garde anti-double fidélité');
+  const prov = read('server/payments/provider.ts');
+  assert.match(prov, /chargily/, 'slot passerelle Chargily');
+  assert.match(prov, /satim/, 'slot passerelle SATIM');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/payments", paymentsRouter\)/);
+  const store = read('src/components/Store.tsx');
+  assert.match(store, /\/api\/payments\/declare/, 'déclaration après commande');
+  assert.match(store, /BaridiMob/);
+  const support = read('server/api/support.ts');
+  assert.match(support, /INSERT INTO payments/, 'don CCP = pièce à valider');
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /المدفوعات والتحصيل/);
+  assert.ok(exists('src/components/admin/AdminPayments.tsx'));
+});
