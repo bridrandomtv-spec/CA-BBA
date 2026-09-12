@@ -4,7 +4,7 @@
 // existent. Les trois chargements sont indépendants (Promise.allSettled).
 import SponsorsStrip from './SponsorsStrip';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark} from 'lucide-react';
+import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark}, GraduationCap from 'lucide-react';
 import { Match, NewsItem } from '../types';
 import { fetchTeamSummary, EMPTY_TEAM_SUMMARY, type TeamSummary } from '../lib/teamSummary';
 import TeamStats from './TeamStats';
@@ -226,6 +226,19 @@ export default function Home({ onNavigate }: HomeProps) {
         <div className="flex-1 min-w-0">
           <p className="text-white font-bold text-sm">متحف النادي</p>
           <p className="text-zinc-500 text-[10px]">بطولات، أساطير وأحداث منذ 1931</p>
+        </div>
+        <ChevronLeft size={16} className="text-zinc-600 flex-shrink-0" />
+      </button>
+
+      {/* مدرسة الكرة — inscription des jeunes */}
+      <button onClick={() => onNavigate?.('academy')}
+        className="w-full bg-zinc-900 border border-teal-500/30 rounded-2xl p-4 flex items-center gap-3 text-right hover:border-teal-500/60 transition-colors">
+        <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center flex-shrink-0">
+          <GraduationCap size={20} className="text-teal-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold text-sm">مدرسة الكرة</p>
+          <p className="text-zinc-500 text-[10px]">سجّل ابنك في فئات U7 → U17</p>
         </div>
         <ChevronLeft size={16} className="text-zinc-600 flex-shrink-0" />
       </button>
