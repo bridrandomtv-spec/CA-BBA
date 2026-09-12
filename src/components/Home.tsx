@@ -5,6 +5,7 @@
 import SponsorsStrip from './SponsorsStrip';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark, GraduationCap, Bus } from 'lucide-react';
+import { Heart, Copy, X } from 'lucide-react';
 import { Match, NewsItem } from '../types';
 import { fetchTeamSummary, EMPTY_TEAM_SUMMARY, type TeamSummary } from '../lib/teamSummary';
 import TeamStats from './TeamStats';
@@ -66,6 +67,13 @@ export default function Home({ onNavigate }: HomeProps) {
   const [news, setNews] = useState<NewsItem[]>([]);
   const [teamSummary, setTeamSummary] = useState<TeamSummary>(EMPTY_TEAM_SUMMARY);
   const [campaign, setCampaign] = useState<SupportCampaign | null>(null);
+  const [donateOpen, setDonateOpen] = useState(false);
+  const [decAmount, setDecAmount] = useState('');
+  const [decRef, setDecRef] = useState('');
+  const [decName, setDecName] = useState('');
+  const [decNotice, setDecNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [decBusy, setDecBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +126,50 @@ export default function Home({ onNavigate }: HomeProps) {
       cancelled = true;
     };
   }, []);
+
+  // رقم حساب النادي مستخرج من نص الحملة (زر النسخ)
+  const clubAccount = (campaign?.bankInfo ?? '').match(/\d{8,}/)?.[0] ?? '';
+
+  const copyAccount = async () => {
+    if (!clubAccount) return;
+    try {
+      await navigator.clipboard.writeText(clubAccount);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setDecNotice({ kind: 'err', text: clubAccount });
+    }
+  };
+
+  const submitDeclaration = async () => {
+    const amount = parseInt(decAmount, 10);
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setDecNotice({ kind: 'err', text: 'أدخل مبلغاً صحيحاً بالدينار.' });
+      return;
+    }
+    setDecBusy(true);
+    try {
+      const res = await fetch('/api/support/declare', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amountDzd: amount, reference: decRef.trim(), donorName: decName.trim() }),
+      });
+      if (res.status === 401) {
+        setDecNotice({ kind: 'err', text: 'يجب تسجيل الدخول أولاً لتصريح التحويل.' });
+      } else if (res.ok) {
+        setDecNotice({ kind: 'ok', text: 'تم إرسال تصريحك ✓ ستتحقق الإدارة من التحويل ثم يُضاف المبلغ للصندوق.' });
+        setDecAmount(''); setDecRef(''); setDecName('');
+      } else {
+        const b = await res.json().catch(() => ({}));
+        setDecNotice({ kind: 'err', text: (b && b.error) || 'تعذر إرسال التصريح.' });
+      }
+    } catch {
+      setDecNotice({ kind: 'err', text: 'تعذر الوصول إلى الخادم.' });
+    } finally {
+      setDecBusy(false);
+    }
+  };
 
   // Match en direct prioritaire ; sinon le prochain match programmé. La marge
   // de 2 h évite qu'une rencontre dont le statut n'a pas encore été
@@ -309,9 +361,91 @@ export default function Home({ onNavigate }: HomeProps) {
               </p>
             )}
 
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => { setDonateOpen(true); setDecNotice(null); }}
+                className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Heart size={16} /> كيف تتبرع؟
+              </button>
+              {clubAccount && (
+                <button
+                  onClick={() => void copyAccount()}
+                  className="px-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Copy size={16} /> {copied ? 'تم النسخ ✓' : 'نسخ الحساب'}
+                </button>
+              )}
+            </div>
+
             <p className="text-[10px] text-zinc-600 mt-2">
               {campaign.donationsCount.toLocaleString('ar-DZ')} عملية موثقة · تحديث من إدارة النادي
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modale « كيف تتبرع » — étapes + تصريح تحويل (file validée admin) */}
+      {donateOpen && campaign && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-t-3xl md:rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-5 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Heart size={18} className="text-yellow-500" /> كيف تتبرع للصندوق
+              </h3>
+              <button onClick={() => setDonateOpen(false)} aria-label="إغلاق"
+                className="p-2 bg-zinc-900 text-zinc-400 rounded-full hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <ol className="space-y-2 text-xs text-zinc-300 list-decimal pr-5 leading-relaxed">
+              <li>حوّل المبلغ عبر BaridiMob أو CCP إلى حساب النادي أدناه.</li>
+              <li>احتفظ برقم العملية (المرجع) الظاهر في تطبيق البريد.</li>
+              <li>صَرِّح بتحويلك هنا : الإدارة تتحقق من الحساب ثم يُضاف مبلغك للصندوق ويظهر في شريط التقدم.</li>
+            </ol>
+
+            {campaign.bankInfo && (
+              <p className="text-xs text-zinc-200 bg-zinc-900 border border-zinc-800 rounded-xl p-3 whitespace-pre-line leading-relaxed">
+                {campaign.bankInfo}
+              </p>
+            )}
+
+            {clubAccount && (
+              <button onClick={() => void copyAccount()}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-sm font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                <Copy size={16} /> {copied ? 'تم نسخ الرقم ✓' : `نسخ رقم الحساب ${clubAccount}`}
+              </button>
+            )}
+
+            <div className="space-y-2 pt-1">
+              <p className="text-sm font-bold text-white">تصريح تحويل</p>
+              <input value={decAmount} onChange={(e) => setDecAmount(e.target.value)} type="number" inputMode="numeric"
+                placeholder="المبلغ بالدينار"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white focus:border-yellow-500 focus:outline-none" />
+              <input value={decRef} onChange={(e) => setDecRef(e.target.value)} placeholder="رقم العملية / المرجع"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white focus:border-yellow-500 focus:outline-none" dir="ltr" />
+              <input value={decName} onChange={(e) => setDecName(e.target.value)}
+                placeholder="اسم المتبرع (اختياري — فارغ = متبرع مجهول)"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-white focus:border-yellow-500 focus:outline-none" />
+            </div>
+
+            {decNotice && (
+              <div role="status" aria-live="polite"
+                className={`p-3 rounded-xl border text-sm font-bold ${
+                  decNotice.kind === 'ok'
+                    ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                    : 'bg-red-500/10 border-red-500/30 text-red-400'
+                }`}>
+                {decNotice.text}
+              </div>
+            )}
+
+            <button onClick={() => void submitDeclaration()} disabled={decBusy}
+              className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 rounded-xl disabled:opacity-50 transition-colors">
+              {decBusy ? 'جاري الإرسال...' : 'إرسال تصريح التحويل'}
+            </button>
+            <p className="text-[10px] text-zinc-600 text-center">التحقق يتم من إدارة النادي — لا يوجد دفع داخل التطبيق.</p>
           </div>
         </div>
       )}

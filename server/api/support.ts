@@ -236,3 +236,101 @@ supportRouter.delete('/campaign/:id/donations/:donationId', requireAdmin, async 
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+/** ── تصريحات الأنصار للصندوق (file d'attente vérifiée) ─────────────────
+ *  Un supporter qui a réellement viré via CCP/BaridiMob le déclare ici ;
+ *  l'administration confirme après pointage du compte, et le don est
+ *  recopié dans support_donations — le registre reste la source de vérité,
+ *  la file n'en est que la déclaration bancaire.
+ */
+supportRouter.post('/declare', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { amountDzd, reference, donorName } = req.body ?? {};
+    const amount = parseInt(String(amountDzd), 10);
+    if (!Number.isInteger(amount) || amount <= 0 || amount > 100000000) {
+      res.status(400).json({ error: 'Montant invalide.' });
+      return;
+    }
+    const camp = await query(
+      `SELECT id FROM support_campaigns WHERE active = true ORDER BY created_at DESC LIMIT 1`,
+    );
+    if (!camp.rowCount) { res.status(404).json({ error: 'Aucune campagne active.' }); return; }
+    const name = String(donorName ?? '').trim().slice(0, 200) || 'متبرع مجهول';
+    const ref = String(reference ?? '').trim().slice(0, 120);
+    const inserted = await query(
+      `INSERT INTO donation_declarations (campaign_id, user_id, donor_name, amount_dzd, method, reference)
+       VALUES ($1, $2, $3, $4, 'ccp', $5) RETURNING id`,
+      [camp.rows[0].id, req.user!.id, name, amount, ref],
+    );
+    res.status(201).json({ id: inserted.rows[0].id });
+  } catch (error) {
+    console.error('[CABBA] support declare:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** File des déclarations : pending d'abord, puis historique récent. */
+supportRouter.get('/declarations', requireAdmin, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT d.id, d.donor_name AS "donorName", d.amount_dzd AS "amountDzd", d.reference, d.status,
+              d.created_at AS "createdAt", u.display_name AS "userName"
+       FROM donation_declarations d
+       LEFT JOIN users u ON u.id = d.user_id
+       ORDER BY (d.status = 'pending') DESC, d.created_at DESC
+       LIMIT 100`,
+    );
+    res.json({ declarations: result.rows });
+  } catch (error) {
+    console.error('[CABBA] support declarations:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Confirmation : le don bascule dans le registre dans la même transaction. */
+supportRouter.post('/declarations/:id/confirm', requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!UUID_RE.test(String(req.params.id))) { res.status(400).json({ error: 'Identifiant invalide.' }); return; }
+    let campaignId = '';
+    let handled = false;
+    await withTransaction(async (client) => {
+      const sel = await client(
+        `SELECT * FROM donation_declarations WHERE id = $1 FOR UPDATE`, [req.params.id],
+      );
+      if (!sel.rowCount) { res.status(404).json({ error: 'Déclaration introuvable.' }); handled = true; return; }
+      const dec = sel.rows[0];
+      if (dec.status !== 'pending') { res.status(409).json({ error: 'Déclaration déjà traitée.' }); handled = true; return; }
+      await client(`UPDATE donation_declarations SET status = 'confirmed' WHERE id = $1`, [dec.id]);
+      await client(
+        `INSERT INTO support_donations (campaign_id, amount_dzd, donor_name, method, note, recorded_by)
+         VALUES ($1, $2, $3, 'ccp', $4, $5)`,
+        [dec.campaign_id, dec.amount_dzd, dec.donor_name,
+         `تصريح أنصار — مرجع ${dec.reference || '—'}`, req.user!.id],
+      );
+      campaignId = String(dec.campaign_id);
+    });
+    if (handled) return;
+    const { raised, count } = await raisedTotal(campaignId);
+    res.json({ raised, donationsCount: count });
+  } catch (error) {
+    console.error('[CABBA] support declaration confirm:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Rejet : la déclaration sort de la file sans toucher au registre. */
+supportRouter.post('/declarations/:id/reject', requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!UUID_RE.test(String(req.params.id))) { res.status(400).json({ error: 'Identifiant invalide.' }); return; }
+    const result = await query(
+      `UPDATE donation_declarations SET status = 'rejected'
+       WHERE id = $1 AND status = 'pending'`, [req.params.id],
+    );
+    if (!result.rowCount) { res.status(404).json({ error: 'Déclaration introuvable ou déjà traitée.' }); return; }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('[CABBA] support declaration reject:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});

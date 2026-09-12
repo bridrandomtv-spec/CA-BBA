@@ -850,3 +850,16 @@ test('paiements CCP/BaridiMob — déclaration par référence, file de validati
   assert.match(dash, /المدفوعات والتحصيل/);
   assert.ok(exists('src/components/admin/AdminPayments.tsx'));
 });
+
+test('صندوق الدعم — تصريحات الأنصار (file d attente + confirmation admin)', () => {
+  assert.ok(migrations().some((f) => f.includes('donation_declarations')), 'migration 030 présente');
+  const support = read('server/api/support.ts');
+  assert.match(support, /\/declare/);
+  assert.match(support, /donation_declarations/);
+  assert.match(support, /declarations\/:id\/confirm/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /كيف تتبرع/);
+  assert.match(home, /\/api\/support\/declare/);
+  const admin = read('src/components/admin/AdminSupport.tsx');
+  assert.match(admin, /تصريحات الأنصار/);
+});
