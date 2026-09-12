@@ -117,7 +117,7 @@ export default function Store() {
         const bought = cart.find((item) => item.product.id === p.id);
         return bought ? { ...p, stock: Math.max(0, (p.stock ?? 0) - bought.quantity) } : p;
       }));
-      setNotice({ kind: 'success', text: 'تم إنشاء الطلب — أكمل تصريح الدفع أدناه.' });
+      setNotice({ kind: 'success', text: 'تم إنشاء الطلب — نافذة تصريح الدفع مفتوحة الآن.' });
     } catch (error: any) {
       console.error('Checkout error:', error);
       setNotice({ kind: 'error', text: (typeof error?.message === 'string' && error.message) || 'حدث خطأ أثناء إتمام الطلب' });
@@ -129,7 +129,8 @@ export default function Store() {
   return (
     <div className="p-4 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full relative" dir="rtl">
       {payFor && (
-        <div className="bg-zinc-900 border border-yellow-500/40 rounded-2xl p-4 space-y-3" dir="rtl">
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl">
+        <div className="bg-zinc-900 border border-yellow-500/40 rounded-t-3xl md:rounded-2xl p-4 space-y-3 w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" dir="rtl">
           <h3 className="text-white font-bold text-sm">تصريح الدفع — الطلب بمبلغ {payFor.total.toLocaleString('ar-DZ')} د.ج</h3>
           {ccpInfo?.ccp && (
             <p className="text-[11px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-xl p-3 leading-relaxed">
@@ -162,6 +163,7 @@ export default function Store() {
             <button onClick={() => setPayFor(null)} className="px-4 bg-zinc-800 text-zinc-300 text-sm rounded-xl">لاحقاً</button>
           </div>
         </div>
+        </div>
       )}
       {/* Header Tabs */}
       <div className="flex p-1 bg-zinc-900 rounded-xl border border-zinc-800 shadow-sm relative z-10">
@@ -189,7 +191,7 @@ export default function Store() {
         <div
           role="status"
           aria-live="polite"
-          className={`p-3 rounded-xl border text-sm font-bold animate-in fade-in duration-200 ${
+          className={`fixed top-4 inset-x-4 md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:w-96 z-[80] p-3 rounded-xl border text-sm font-bold shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 ${
             notice.kind === 'success'
               ? 'bg-green-500/10 border-green-500/30 text-green-400'
               : 'bg-red-500/10 border-red-500/30 text-red-400'
