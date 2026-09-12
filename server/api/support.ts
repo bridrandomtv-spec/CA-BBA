@@ -295,14 +295,14 @@ supportRouter.post('/declarations/:id/confirm', requireAdmin, async (req: Reques
     let campaignId = '';
     let handled = false;
     await withTransaction(async (client) => {
-      const sel = await client.query(
+      const sel = await client(
         `SELECT * FROM donation_declarations WHERE id = $1 FOR UPDATE`, [req.params.id],
       );
       if (!sel.rowCount) { res.status(404).json({ error: 'Déclaration introuvable.' }); handled = true; return; }
       const dec = sel.rows[0];
       if (dec.status !== 'pending') { res.status(409).json({ error: 'Déclaration déjà traitée.' }); handled = true; return; }
-      await client.query(`UPDATE donation_declarations SET status = 'confirmed' WHERE id = $1`, [dec.id]);
-      await client.query(
+      await client(`UPDATE donation_declarations SET status = 'confirmed' WHERE id = $1`, [dec.id]);
+      await client(
         `INSERT INTO support_donations (campaign_id, amount_dzd, donor_name, method, note, recorded_by)
          VALUES ($1, $2, $3, 'ccp', $4, $5)`,
         [dec.campaign_id, dec.amount_dzd, dec.donor_name,
