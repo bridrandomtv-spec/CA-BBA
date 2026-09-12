@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import {
   Users, Newspaper, Trophy, MessageSquare, Music, CreditCard,
-  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText, Landmark, GraduationCap, Bus
+  Video, ShoppingBag, ShieldAlert, Settings, BarChart3, ListChecks, Heart, Ticket, Wallet, Handshake, ScrollText, Landmark, GraduationCap, Bus, Award
 } from 'lucide-react';
 import AdminNews from './AdminNews';
 import AdminMatches from './AdminMatches';
@@ -30,8 +30,9 @@ import AdminMuseum from './AdminMuseum';
 import AdminAcademy from './AdminAcademy';
 import AdminTrips from './AdminTrips';
 import AdminPayments from './AdminPayments';
+import AdminLoyalty from './AdminLoyalty';
 
-type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support' | 'tickets' | 'accounting' | 'sponsors' | 'audit' | 'museum' | 'academy' | 'trips' | 'payments';
+type AdminView = 'menu' | 'news' | 'matches' | 'users' | 'chants' | 'videos' | 'store' | 'memberships' | 'analytics' | 'polls' | 'support' | 'tickets' | 'accounting' | 'sponsors' | 'audit' | 'museum' | 'academy' | 'trips' | 'payments' | 'loyalty';
 
 interface AdminModule {
   id: AdminView | 'planned';
@@ -63,6 +64,7 @@ export default function AdminDashboard() {
     { id: 'museum', key: 'museum', title: 'المتحف والبطولات', icon: <Landmark size={20} />, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
     { id: 'academy', key: 'academy', title: 'مدرسة الكرة', icon: <GraduationCap size={20} />, color: 'text-teal-400', bg: 'bg-teal-500/10' },
     { id: 'trips', key: 'trips', title: 'تنقلات الأنصار', icon: <Bus size={20} />, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { id: 'loyalty', key: 'loyalty', title: 'نقاط الوفاء', icon: <Award size={20} />, color: 'text-yellow-500', bg: 'bg-yellow-500/10' },
     { id: 'payments', key: 'payments', title: 'المدفوعات والتحصيل', icon: <CreditCard size={20} />, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
     { id: 'analytics', key: 'analytics', title: 'التحليلات', icon: <BarChart3 size={20} />, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
     { id: 'planned', key: 'community', title: 'إدارة المجتمع', icon: <MessageSquare size={20} />, color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
@@ -127,6 +129,7 @@ export default function AdminDashboard() {
       {activeView === 'museum' && <AdminMuseum onBack={() => setActiveView('menu')} />}
       {activeView === 'academy' && <AdminAcademy onBack={() => setActiveView('menu')} />}
       {activeView === 'trips' && <AdminTrips onBack={() => setActiveView('menu')} />}
+      {activeView === 'loyalty' && <AdminLoyalty onBack={() => setActiveView('menu')} />}
       {activeView === 'payments' && <AdminPayments onBack={() => setActiveView('menu')} />}
       {activeView === 'analytics' && <AdminAnalytics onBack={() => setActiveView('menu')} />}
     </div>
