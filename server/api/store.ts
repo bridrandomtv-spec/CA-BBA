@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { addPoints } from '../loyaltyLog.js';
 import { query, pool } from '../db/index.js';
 import { requireAdmin, requireAuth } from '../auth.js';
 import { createRateLimiter } from '../rateLimit.js';
@@ -166,6 +167,10 @@ storeRouter.post('/orders', requireAuth, orderRateLimit, async (req: Request, re
       );
     }
     await client.query('COMMIT');
+    if (status === 'confirmed') {
+      const ownerRow = await query('SELECT user_id FROM orders WHERE id=$1', [orderId]);
+      if (ownerRow.rows.length) void addPoints(ownerRow.rows[0].user_id, 10, 'order', orderId);
+    }
     res.status(201).json({ order: { ...mapOrder(orderResult.rows[0]), items: lockedItems } });
 
     // Confirmation de commande — asynchrone et best-effort : une panne Resend
