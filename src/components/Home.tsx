@@ -4,7 +4,7 @@
 // existent. Les trois chargements sont indépendants (Promise.allSettled).
 import SponsorsStrip from './SponsorsStrip';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Trophy, Calendar, ChevronLeft, History, MapPin , Landmark, GraduationCap, Bus } from 'lucide-react';
 import { Match, NewsItem } from '../types';
 import { fetchTeamSummary, EMPTY_TEAM_SUMMARY, type TeamSummary } from '../lib/teamSummary';
 import TeamStats from './TeamStats';
@@ -239,6 +239,19 @@ export default function Home({ onNavigate }: HomeProps) {
         <div className="flex-1 min-w-0">
           <p className="text-white font-bold text-sm">مدرسة الكرة</p>
           <p className="text-zinc-500 text-[10px]">سجّل ابنك في فئات U7 → U17</p>
+        </div>
+        <ChevronLeft size={16} className="text-zinc-600 flex-shrink-0" />
+      </button>
+
+      {/* تنقلات الأنصار — bus matchs à l'extérieur */}
+      <button onClick={() => onNavigate?.('trips')}
+        className="w-full bg-zinc-900 border border-blue-500/30 rounded-2xl p-4 flex items-center gap-3 text-right hover:border-blue-500/60 transition-colors">
+        <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
+          <Bus size={20} className="text-blue-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-bold text-sm">تنقلات الأنصار</p>
+          <p className="text-zinc-500 text-[10px]">bus organisés pour les matchs à l'extérieur</p>
         </div>
         <ChevronLeft size={16} className="text-zinc-600 flex-shrink-0" />
       </button>
