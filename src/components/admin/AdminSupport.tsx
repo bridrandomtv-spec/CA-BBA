@@ -56,6 +56,55 @@ export default function AdminSupport({ onBack }: { onBack: () => void }) {
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // تصريحات الأنصار بالصندوق — file d'attente à valider
+  const [declarations, setDeclarations] = useState<Array<{
+    id: string; donorName: string; amountDzd: number; reference: string;
+    status: string; createdAt: string; userName: string | null;
+  }>>([]);
+
+  const loadDeclarations = useCallback(async () => {
+    try {
+      const res = await fetch('/api/support/declarations', { credentials: 'same-origin' });
+      if (res.ok) setDeclarations((await res.json()).declarations ?? []);
+    } catch (e) {
+      console.error('[CABBA] admin declarations:', e);
+    }
+  }, []);
+
+  useEffect(() => { void loadDeclarations(); }, [loadDeclarations]);
+
+  const processDeclaration = async (id: string, action: 'confirm' | 'reject') => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/support/declarations/${id}/${action}`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (res.ok) {
+        setNotice(action === 'confirm'
+          ? 'تم تأكيد التصريح وإضافة الدون إلى السجل ✓'
+          : 'تم رفض التصريح.');
+        void loadDeclarations();
+        const cres = await fetch('/api/support/campaign', { credentials: 'same-origin' });
+        if (cres.ok) {
+          const cj = await cres.json();
+          setCampaign(cj.campaign ?? null);
+          if (cj.campaign) {
+            const dres = await fetch(`/api/support/campaign/${cj.campaign.id}/donations`, { credentials: 'same-origin' });
+            if (dres.ok) setDonations((await dres.json()).donations ?? []);
+          }
+        }
+      } else {
+        const b = await res.json().catch(() => ({}));
+        setNotice((b && b.error) || 'رفض الخادم العملية.');
+      }
+    } catch {
+      setNotice('تعذر الوصول إلى الخادم.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/support/campaign', { credentials: 'same-origin' });
@@ -273,6 +322,42 @@ export default function AdminSupport({ onBack }: { onBack: () => void }) {
               </div>
             </div>
           )}
+          {/* تصريحات الأنصار — file d'attente vérifiée */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+            <h4 className="font-bold text-white text-sm mb-3 flex items-center gap-2">
+              <Heart size={16} className="text-yellow-500" /> تصريحات الأنصار بانتظار التحقق
+            </h4>
+            {declarations.filter((d) => d.status === 'pending').length === 0 ? (
+              <p className="text-zinc-500 text-xs">لا توجد تصريحات معلّقة حالياً.</p>
+            ) : (
+              <div className="space-y-2">
+                {declarations.filter((d) => d.status === 'pending').map((d) => (
+                  <div key={d.id} className="flex items-center gap-2 bg-zinc-950/60 border border-zinc-800 rounded-xl px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-white font-bold truncate">
+                        {d.amountDzd.toLocaleString('ar-DZ')} د.ج — {d.donorName}
+                        {d.userName && d.userName !== d.donorName
+                          ? <span className="text-zinc-500 font-normal"> ({d.userName})</span>
+                          : null}
+                      </p>
+                      <p className="text-[10px] text-zinc-600">
+                        <span dir="ltr">ref: {d.reference || '—'}</span> · {new Date(d.createdAt).toLocaleDateString('ar-DZ')}
+                      </p>
+                    </div>
+                    <button onClick={() => void processDeclaration(d.id, 'confirm')} disabled={busy}
+                      className="text-[10px] font-bold bg-yellow-500 text-black px-2 py-1 rounded hover:bg-yellow-400 disabled:opacity-50">
+                      تأكيد
+                    </button>
+                    <button onClick={() => void processDeclaration(d.id, 'reject')} disabled={busy}
+                      className="text-[10px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded hover:bg-red-500 hover:text-white disabled:opacity-50">
+                      رفض
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </>
       )}
     </div>
