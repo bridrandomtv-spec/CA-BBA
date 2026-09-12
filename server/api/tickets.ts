@@ -12,6 +12,7 @@ import { requireAdmin, requireAuth } from '../auth.js';
 import { isValidationError, optionalString, requireString } from './validate.js';
 import { sendTicketIssuedEmail } from '../email.js';
 import { logAdmin } from '../auditLog.js';
+import { addPoints } from '../loyaltyLog.js';
 
 export const ticketsRouter = Router();
 
@@ -212,6 +213,7 @@ ticketsRouter.post('/scan', requireAuth, async (req: Request, res: Response): Pr
       `SELECT COUNT(*)::int AS n FROM tickets WHERE match_id=$1 AND status='used'`,
       [row.match_id],
     );
+    if (row.owner_id) void addPoints(row.owner_id, 5, 'scan', cleanCode);
     res.json({ result: 'ok', ticket: mapTicket(updated.rows[0]), entries: Number(entries.rows[0].n) });
   } catch (error) {
     console.error('[CABBA] ticket scan:', error);
