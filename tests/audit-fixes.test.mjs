@@ -822,3 +822,9 @@ test('التقرير الشهري التلقائي — compile + envoi direction
   const ui = read('src/components/admin/AdminAccounting.tsx');
   assert.match(ui, /إرسال التقرير الآن/, 'bouton dans le module comptabilité');
 });
+
+test('montage /api/loyalty servi (garde-fou fusion)', () => {
+  const server = read('server.ts');
+  assert.match(server, /import \{ loyaltyRouter \} from "\.\/server\/api\/loyalty\.js";/);
+  assert.match(server, /app\.use\("\/api\/loyalty", loyaltyRouter\);/);
+});
