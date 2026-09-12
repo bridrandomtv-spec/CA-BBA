@@ -863,3 +863,16 @@ test('صندوق الدعم — تصريحات الأنصار (file d attente + 
   const admin = read('src/components/admin/AdminSupport.tsx');
   assert.match(admin, /تصريحات الأنصار/);
 });
+
+test('audit commande — aucun `status` nu après COMMIT (ReferenceError Node)', () => {
+  const store = read('server/api/store.ts');
+  assert.doesNotMatch(store, /COMMIT'\);\n\s*if \(status ===/);
+  assert.doesNotMatch(store, /addPoints/, 'les +10 points appartiennent à payments.ts');
+  const payments = read('server/api/payments.ts');
+  assert.match(payments, /addPoints/);
+});
+test('audit support — GET /campaign public (accueil anonyme)', () => {
+  const support = read('server/api/support.ts');
+  const line = support.split('\n').find((l) => l.startsWith("supportRouter.get('/campaign',"));
+  assert.ok(line && !line.includes('requireAuth'), 'route campagne sans requireAuth');
+});
