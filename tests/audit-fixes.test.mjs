@@ -791,3 +791,21 @@ test('مدرسة الكرة — inscription publique U7-U17 + gestion admin (pro
   assert.ok(exists('src/components/admin/AdminAcademy.tsx'));
   assert.ok(exists('src/components/AcademyForm.tsx'));
 });
+
+test('تنقلات الأنصار — bus matchs extérieurs, réservation 1-6, gestion admin (programme 7/8)', () => {
+  assert.ok(migrations().some((f) => f.includes('028_trips')));
+  const tr = read('server/api/trips.ts');
+  assert.match(tr, /requireAdmin/);
+  assert.match(tr, /requireAuth/);
+  assert.match(tr, /seats BETWEEN 1 AND 6|seats < 1 \|\| seats > 6/, 'bornes 1 à 6 places');
+  const server = read('server.ts');
+  assert.match(server, /app\.use\("\/api\/trips", tripsRouter\)/);
+  const app = read('src/App.tsx');
+  assert.match(app, /case 'trips'/);
+  const home = read('src/components/Home.tsx');
+  assert.match(home, /onNavigate\?\.\('trips'\)/);
+  const dash = read('src/components/admin/AdminDashboard.tsx');
+  assert.match(dash, /تنقلات الأنصار/);
+  assert.ok(exists('src/components/Trips.tsx'));
+  assert.ok(exists('src/components/admin/AdminTrips.tsx'));
+});
