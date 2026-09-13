@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { logAdmin } from '../auditLog.js';
 import { query } from '../db/index.js';
 import { requireAdmin, BCRYPT_ROUNDS, normalizeEmail, isEmailShaped } from '../auth.js';
