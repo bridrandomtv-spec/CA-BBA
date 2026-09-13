@@ -17,6 +17,8 @@ const mapSponsor = (row: any) => ({
   name: row.name,
   url: row.url,
   logoUrl: row.logo_url,
+  coverUrl: typeof row.cover_url === 'string' ? row.cover_url : '',
+  videoUrl: typeof row.video_url === 'string' ? row.video_url : '',
   position: Number(row.position),
   active: row.active,
 });
@@ -48,13 +50,15 @@ sponsorsRouter.get('/admin', requireAdmin, async (_req: Request, res: Response):
 sponsorsRouter.post('/', requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
     const name = requireString(req.body?.name, 'name', 120);
-    const logoUrl = requireString(req.body?.logoUrl, 'logoUrl', 500);
+    const logoUrl = optionalString(req.body?.logoUrl, 'logoUrl', 500) ?? '';
+    const coverUrl = optionalString(req.body?.coverUrl, 'coverUrl', 500) ?? '';
+    const videoUrl = optionalString(req.body?.videoUrl, 'videoUrl', 500) ?? '';
     const url = optionalString(req.body?.url, 'url', 500) ?? '';
     const position = Number.isInteger(Number(req.body?.position)) ? Number(req.body.position) : 100;
     const result = await query(
-      `INSERT INTO sponsors (name, url, logo_url, position, active)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name, url, logoUrl, position, req.body?.active !== false],
+      `INSERT INTO sponsors (name, url, logo_url, cover_url, video_url, position, active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [name, url, logoUrl, coverUrl, videoUrl, position, req.body?.active !== false],
     );
     void logAdmin(req.user, 'sponsor.create', name);
     res.status(201).json({ sponsor: mapSponsor(result.rows[0]) });
@@ -72,14 +76,16 @@ sponsorsRouter.patch('/:id', requireAdmin, async (req: Request, res: Response): 
     if (!existing.rows.length) { res.status(404).json({ error: 'الشريك غير موجود.' }); return; }
     const row = existing.rows[0];
     const name = optionalString(req.body?.name, 'name', 120) ?? row.name;
-    const logoUrl = optionalString(req.body?.logoUrl, 'logoUrl', 500) ?? row.logo_url;
+    const logoUrl = optionalString(req.body?.logoUrl, 'logoUrl', 500) ?? (row.logo_url ?? '');
+    const coverUrl = optionalString(req.body?.coverUrl, 'coverUrl', 500) ?? (row.cover_url ?? '');
+    const videoUrl = optionalString(req.body?.videoUrl, 'videoUrl', 500) ?? (row.video_url ?? '');
     const url = optionalString(req.body?.url, 'url', 500) ?? row.url;
     const position = req.body?.position === undefined ? Number(row.position) : Number(req.body.position);
     const active = req.body?.active === undefined ? row.active : Boolean(req.body.active);
     const updated = await query(
-      `UPDATE sponsors SET name=$2, url=$3, logo_url=$4, position=$5, active=$6
+      `UPDATE sponsors SET name=$2, url=$3, logo_url=$4, position=$5, active=$6, cover_url=$7, video_url=$8
        WHERE id=$1 RETURNING *`,
-      [req.params.id, name, url, logoUrl, position, active],
+      [req.params.id, name, url, logoUrl, position, active, coverUrl, videoUrl],
     );
     void logAdmin(req.user, 'sponsor.update', String(req.params.id), name);
     res.json({ sponsor: mapSponsor(updated.rows[0]) });

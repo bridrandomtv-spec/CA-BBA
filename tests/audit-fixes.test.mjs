@@ -887,3 +887,17 @@ test('audit utilisateurs — invitation admin, anonymisation, supprimés masqué
   assert.match(admin, /إضافة مستخدم/);
   assert.match(admin, /inviteUrl/);
 });
+
+test('audit sponsors — couverture + vidéo promo + repli logo + grille pleine largeur', () => {
+  assert.ok(migrations().some((f) => f.includes('sponsors_cover_video')), 'migration 031 présente');
+  const api = read('server/api/sponsors.ts');
+  assert.match(api, /cover_url/);
+  assert.match(api, /video_url/);
+  const strip = read('src/components/SponsorsStrip.tsx');
+  assert.match(strip, /onError/);
+  assert.match(strip, /youtube\.com\/embed/);
+  assert.match(strip, /grid grid-cols-3/);
+  const admin = read('src/components/admin/AdminSponsors.tsx');
+  assert.match(admin, /صورة الغلاف/);
+  assert.match(admin, /فيديو promo/);
+});
