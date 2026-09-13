@@ -901,3 +901,12 @@ test('audit sponsors — couverture + vidéo promo + repli logo + grille pleine 
   assert.match(admin, /صورة الغلاف/);
   assert.match(admin, /فيديو promo/);
 });
+
+test('audit sponsors — médias Facebook : vidéo via plugin, prévisualisation des URLs image', () => {
+  const strip = read('src/components/SponsorsStrip.tsx');
+  assert.match(strip, /plugins\/video\.php/);
+  assert.match(strip, /fb\.watch/);
+  const admin = read('src/components/admin/AdminSponsors.tsx');
+  assert.match(admin, /UrlPreview/);
+  assert.match(admin, /معاينة/);
+});
