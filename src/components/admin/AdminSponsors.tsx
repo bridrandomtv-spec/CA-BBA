@@ -1,7 +1,6 @@
 // إدارة شركاء النادي — création, édition, activation, retrait.
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Handshake, Pencil, Trash2 } from 'lucide-react';
-import { Handshake } from 'lucide-react';
 
 interface Sponsor { id: string; name: string; url: string; logoUrl: string; coverUrl: string; videoUrl: string; position: number; active: boolean; }
 
