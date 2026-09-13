@@ -140,7 +140,7 @@ usersRouter.patch('/:id/role', requireAdmin, async (req, res) => {
   try {
     const result = await query('UPDATE users SET role=$1,updated_at=NOW() WHERE id=$2 RETURNING id,role', [role, req.params.id]);
     if (!result.rows.length) { res.status(404).json({ error: 'User not found' }); return; }
-    void logAdmin(req.user, 'user.role', String(req.params.id), role);
+    void logAdmin(req.user,'user.role', String(req.params.id), role);
     res.json({ success: true, user: { uid: result.rows[0].id, role: result.rows[0].role } });
   } catch (error) { console.error('[CABBA] role:', error); res.status(500).json({ error: 'Internal server error' }); }
 });
