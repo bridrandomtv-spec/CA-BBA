@@ -4,6 +4,25 @@ import { ChevronRight, Handshake, Pencil, Trash2 } from 'lucide-react';
 
 interface Sponsor { id: string; name: string; url: string; logoUrl: string; coverUrl: string; videoUrl: string; position: number; active: boolean; }
 
+function UrlPreview({ src, label }: { src: string; label: string }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => { setBroken(false); }, [src]);
+  if (!src) return null;
+  return (
+    <div className="flex-1 min-w-0">
+      <p className="text-[10px] text-zinc-500 mb-1">معاينة {label}</p>
+      {broken ? (
+        <p className="text-[10px] text-red-400 font-bold leading-relaxed">
+          هذا الرابط لا يعرض صورة مباشرة (صفحة Facebook؟). انقر يميناً على الصورة ← «copier l'adresse de l'image».
+        </p>
+      ) : (
+        <img src={src} alt={label} loading="lazy" decoding="async" onError={() => setBroken(true)}
+          className="h-16 w-16 rounded-lg object-cover border border-zinc-700 bg-white" />
+      )}
+    </div>
+  );
+}
+
 function LogoThumb({ src, name }: { src: string; name: string }) {
   const [broken, setBroken] = useState(!src);
   useEffect(() => { setBroken(!src); }, [src]);
@@ -125,6 +144,18 @@ export default function AdminSponsors({ onBack }: { onBack: () => void }) {
             <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} placeholder="رابط صورة الغلاف https://… (اختياري)" className={input} />
 
             <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="رابط فيديو promo YouTube https://youtube.com/watch?v=… (اختياري)" className={input} />
+
+            {(logoUrl || coverUrl) && (
+              <div className="flex gap-3 items-start">
+                <UrlPreview src={logoUrl} label="الشعار" />
+                <UrlPreview src={coverUrl} label="الغلاف" />
+              </div>
+            )}
+
+            <p className="text-[10px] text-zinc-500 leading-relaxed">
+              الصور : رابط مباشر (.png/.jpg) — من Facebook : انقر يميناً على الصورة ثم «copier l'adresse de l'image».
+              الفيديو : YouTube أو رابط Facebook عام (يُدمج تلقائياً عبر مشغل Facebook).
+            </p>
         </label>
         <label className="block">
           <span className={label}>موقع الشريك (اختياري)</span>

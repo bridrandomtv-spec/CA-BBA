@@ -40,6 +40,9 @@ function SponsorLogo({ src, name, size }: { src: string; name: string; size: 'sm
 function SponsorCard({ s, onClose }: { s: Sponsor; onClose: () => void }) {
   const [coverBroken, setCoverBroken] = useState(!s.coverUrl);
   const video = s.videoUrl ? ytId(s.videoUrl) : null;
+  // Vidéo Facebook publique : intégrée via le plugin officiel (iframe),
+  // car un lien share/facebook ne se lit pas comme un fichier direct.
+  const fbVideoUrl = s.videoUrl && !video && /(?:facebook\.com|fb\.watch)/.test(s.videoUrl) ? s.videoUrl : null;
   return (
     <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4" dir="rtl" onClick={onClose}>
       <div className="bg-zinc-950 border border-zinc-800 rounded-t-3xl md:rounded-2xl w-full max-w-md max-h-[88vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -78,9 +81,17 @@ function SponsorCard({ s, onClose }: { s: Sponsor; onClose: () => void }) {
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
               />
+            ) : fbVideoUrl ? (
+              <iframe
+                src={`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(fbVideoUrl)}&show_text=false&width=560`}
+                title={`فيديو ${s.name}`}
+                className="w-full aspect-video rounded-xl border border-zinc-800"
+                allow="autoplay; clipboard-write; picture-in-picture; encrypted-media"
+                allowFullScreen
+              />
             ) : (
-              <div className="w-full aspect-video rounded-xl border border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 text-xs">
-                لا يوجد فيديو promo لهذا الشريك بعد
+              <div className="w-full aspect-video rounded-xl border border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 text-xs text-center px-4">
+                لا يوجد فيديو promo — أضف رابط YouTube أو رابط Facebook عام من لوحة الإدارة
               </div>
             )}
           </div>
