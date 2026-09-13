@@ -876,3 +876,14 @@ test('audit support — GET /campaign public (accueil anonyme)', () => {
   const line = support.split('\n').find((l) => l.startsWith("supportRouter.get('/campaign',"));
   assert.ok(line && !line.includes('requireAuth'), 'route campagne sans requireAuth');
 });
+
+test('audit utilisateurs — invitation admin, anonymisation, supprimés masqués', () => {
+  const users = read('server/api/users.ts');
+  assert.match(users, /usersRouter\.post\('\/'/);
+  assert.match(users, /password_reset_tokens/);
+  assert.match(users, /usersRouter\.delete\('\/:id'/);
+  assert.match(users, /deleted_at IS NULL/);
+  const admin = read('src/components/admin/AdminUsers.tsx');
+  assert.match(admin, /إضافة مستخدم/);
+  assert.match(admin, /inviteUrl/);
+});
