@@ -1,14 +1,30 @@
 // إدارة شركاء النادي — création, édition, activation, retrait.
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, Handshake, Pencil, Trash2 } from 'lucide-react';
+import { Handshake } from 'lucide-react';
 
-interface Sponsor { id: string; name: string; url: string; logoUrl: string; position: number; active: boolean; }
+interface Sponsor { id: string; name: string; url: string; logoUrl: string; coverUrl: string; videoUrl: string; position: number; active: boolean; }
+
+function LogoThumb({ src, name }: { src: string; name: string }) {
+  const [broken, setBroken] = useState(!src);
+  useEffect(() => { setBroken(!src); }, [src]);
+  if (broken) {
+    return (
+      <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
+        <Handshake size={16} className="text-amber-500" />
+      </div>
+    );
+  }
+  return <img src={src} alt={name} onError={() => setBroken(true)} className="w-10 h-10 object-contain rounded-lg bg-white p-1 flex-shrink-0" />;
+}
 
 export default function AdminSponsors({ onBack }: { onBack: () => void }) {
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [position, setPosition] = useState('100');
   const [active, setActive] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
@@ -32,10 +48,10 @@ export default function AdminSponsors({ onBack }: { onBack: () => void }) {
   }, [notice]);
 
   const submit = async () => {
-    if (!name.trim() || !logoUrl.trim()) { setNotice('الاسم ورابط الشعار مطلوبان.'); return; }
+    if (!name.trim()) { setNotice('الاسم مطلوب.'); return; }
     setBusy(true);
     try {
-      const body = { name: name.trim(), url: url.trim(), logoUrl: logoUrl.trim(), position: Number(position) || 100, active };
+      const body = { name: name.trim(), url: url.trim(), logoUrl: logoUrl.trim(), coverUrl: coverUrl.trim(), videoUrl: videoUrl.trim(), position: Number(position) || 100, active };
       const res = editId
         ? await fetch(`/api/sponsors/${encodeURIComponent(editId)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         : await fetch('/api/sponsors', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -106,6 +122,10 @@ export default function AdminSponsors({ onBack }: { onBack: () => void }) {
         <label className="block">
           <span className={label}>رابط الشعار (صورة)</span>
           <input value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://…/logo.png" className={input} />
+
+            <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} placeholder="رابط صورة الغلاف https://… (اختياري)" className={input} />
+
+            <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="رابط فيديو promo YouTube https://youtube.com/watch?v=… (اختياري)" className={input} />
         </label>
         <label className="block">
           <span className={label}>موقع الشريك (اختياري)</span>
@@ -132,7 +152,7 @@ export default function AdminSponsors({ onBack }: { onBack: () => void }) {
           <p className="text-center text-zinc-600 text-xs py-4">لا شركاء بعد — أضف أول مموّل للنادي</p>
         ) : sponsors.map((s) => (
           <div key={s.id} className="flex items-center gap-3 bg-zinc-950/60 border border-zinc-800 rounded-xl px-3 py-2">
-            <img src={s.logoUrl} alt={s.name} className="w-10 h-10 object-contain rounded-lg bg-white p-1 flex-shrink-0" />
+            <LogoThumb src={s.logoUrl} name={s.name} />
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-bold truncate">{s.name}</p>
               <p className="text-[10px] text-zinc-500">ترتيب {s.position}</p>
@@ -142,7 +162,7 @@ export default function AdminSponsors({ onBack }: { onBack: () => void }) {
             </span>
             <button onClick={() => void toggle(s)} disabled={busy} aria-label="تبديل النشاط"
               className="text-zinc-500 hover:text-white p-1 text-[10px] font-bold">{s.active ? 'إيقاف' : 'تفعيل'}</button>
-            <button onClick={() => { setEditId(s.id); setName(s.name); setUrl(s.url); setLogoUrl(s.logoUrl); setPosition(String(s.position)); setActive(s.active); }}
+            <button onClick={() => { setEditId(s.id); setName(s.name); setUrl(s.url); setLogoUrl(s.logoUrl); setCoverUrl(s.coverUrl || ''); setVideoUrl(s.videoUrl || ''); setPosition(String(s.position)); setActive(s.active); }}
               aria-label="تعديل" className="text-zinc-500 hover:text-white p-1"><Pencil size={14} /></button>
             <button onClick={() => void remove(s)} disabled={busy} aria-label="حذف" className="text-zinc-600 hover:text-red-400 p-1"><Trash2 size={14} /></button>
           </div>
